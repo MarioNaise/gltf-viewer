@@ -1,0 +1,17 @@
+.{
+    .name = .gltfv,
+    .version = "0.0.0",
+    .fingerprint = 0x45f9cc5f8b5d1d3e,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .zgltf = .{
+            .path = "zgltf",
+        },
+    },
+    .paths = .{
+        ".gitignore",
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
