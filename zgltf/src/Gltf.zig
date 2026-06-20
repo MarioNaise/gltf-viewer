@@ -1373,7 +1373,7 @@ test "gltf.parseGlb" {
     const expectEqualSlices = std.testing.expectEqualSlices;
 
     // This is the '.glb' file.
-    const glb_buf = try std.fs.cwd().readFileAllocOptions(allocator, "test-samples/box_binary/Box.glb", 512_000, null, .@"4", null);
+    const glb_buf = try std.Io.Dir.cwd().readFileAllocOptions(std.testing.io, "test-samples/box_binary/Box.glb", allocator, .limited(512_000), .@"4", null);
     defer allocator.free(glb_buf);
 
     var gltf = Gltf.init(allocator);
@@ -1415,11 +1415,9 @@ test "gltf.parseGlbTextured" {
     const expectEqualSlices = std.testing.expectEqualSlices;
 
     // This is the '.glb' file.
-    const glb_buf = try std.fs.cwd().readFileAllocOptions(
-        allocator,
-        "test-samples/box_binary_textured/BoxTextured.glb",
-        512_000,
-        null,
+    const glb_buf = try std.Io.Dir.cwd().readFileAllocOptions(std.testing.io,
+        "test-samples/box_binary_textured/BoxTextured.glb",allocator,
+        .limited(512_000),
         .@"4",
         null
     );
@@ -1430,10 +1428,10 @@ test "gltf.parseGlbTextured" {
 
     try gltf.parseGlb(glb_buf);
 
-    const test_to_check = try std.fs.cwd().readFileAlloc(
-        allocator,
+    const test_to_check = try std.Io.Dir.cwd().readFileAlloc(std.testing.io,
         "test-samples/box_binary_textured/test.png",
-        512_000
+        allocator,
+        .limited(512_000)
     );
     defer allocator.free(test_to_check);
 
@@ -1448,11 +1446,9 @@ test "gltf.parse" {
 
     // This is the '.gltf' file, a json specifying what information is in the
     // model and how to retrieve it inside binary file(s).
-    const buf = try std.fs.cwd().readFileAllocOptions(
-        allocator,
-        "test-samples/rigged_simple/RiggedSimple.gltf",
-        512_000,
-        null,
+    const buf = try std.Io.Dir.cwd().readFileAllocOptions(std.testing.io,
+        "test-samples/rigged_simple/RiggedSimple.gltf",allocator,
+        .limited(512_000),
         .@"4",
         null
     );
@@ -1488,11 +1484,9 @@ test "gltf.parse (cameras)" {
     const allocator = std.testing.allocator;
     const expectEqual = std.testing.expectEqual;
 
-    const buf = try std.fs.cwd().readFileAllocOptions(
-        allocator,
-        "test-samples/cameras/Cameras.gltf",
-        512_000,
-        null,
+    const buf = try std.Io.Dir.cwd().readFileAllocOptions(std.testing.io,
+        "test-samples/cameras/Cameras.gltf",allocator,
+        .limited(512_000),
         .@"4",
         null
     );
@@ -1527,22 +1521,18 @@ test "gltf.getDataFromBufferView" {
     const allocator = std.testing.allocator;
     const expectEqualSlices = std.testing.expectEqualSlices;
 
-    const buf = try std.fs.cwd().readFileAllocOptions(
-        allocator,
-        "test-samples/box/Box.gltf",
-        512_000,
-        null,
+    const buf = try std.Io.Dir.cwd().readFileAllocOptions(std.testing.io,
+        "test-samples/box/Box.gltf",allocator,
+        .limited(512_000),
         .@"4",
         null
     );
     defer allocator.free(buf);
 
     // This is the '.bin' file containing all the gltf underneath data.
-    const binary = try std.fs.cwd().readFileAllocOptions(
-        allocator,
-        "test-samples/box/Box0.bin",
-        5_000_000,
-        null,
+    const binary = try std.Io.Dir.cwd().readFileAllocOptions(std.testing.io,
+        "test-samples/box/Box0.bin",allocator,
+        .limited(5_000_000),
         // From gltf spec, data from BufferView should be 4 bytes aligned.
         .@"4",
         null,
@@ -1586,11 +1576,9 @@ test "gltf.parse (lights)" {
     const expect = std.testing.expect;
     const expectEqual = std.testing.expectEqual;
 
-    const buf = try std.fs.cwd().readFileAllocOptions(
-        allocator,
-        "test-samples/khr_lights_punctual/Lights.gltf",
-        512_000,
-        null,
+    const buf = try std.Io.Dir.cwd().readFileAllocOptions(std.testing.io,
+        "test-samples/khr_lights_punctual/Lights.gltf",allocator,
+        .limited(512_000),
         .@"4",
         null
     );
