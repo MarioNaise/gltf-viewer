@@ -1,6 +1,8 @@
 const std = @import("std");
-const vec = @import("vector.zig");
 const Framebuffer = @This();
+
+pub const Pixel = [2]i32;
+pub const Color = [4]u8;
 
 width: usize,
 height: usize,
@@ -27,12 +29,12 @@ pub fn deinit(self: *Framebuffer) void {
 }
 
 // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
-pub fn drawLine(self: *Framebuffer, a: vec.Vec2, b: vec.Vec2) void {
-    var x0 = a.x;
-    var y0 = a.y;
+pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
+    var x0 = a[0];
+    var y0 = a[1];
 
-    const x1 = b.x;
-    const y1 = b.y;
+    const x1 = b[0];
+    const y1 = b[1];
 
     const dx: i32 = @intCast(@abs(x1 - x0));
     const sx: i32 = if (x0 < x1) 1 else -1;
@@ -43,7 +45,7 @@ pub fn drawLine(self: *Framebuffer, a: vec.Vec2, b: vec.Vec2) void {
     var err = dx + dy;
 
     while (true) {
-        self.putPixel(x0, y0, 0, 0, 0);
+        self.putPixel(.{ x0, y0 }, c);
 
         const e2 = 2 * err;
 
@@ -61,17 +63,27 @@ pub fn drawLine(self: *Framebuffer, a: vec.Vec2, b: vec.Vec2) void {
     }
 }
 
-pub fn putPixel(self: *Framebuffer, x: i32, y: i32, r: u8, g: u8, b: u8) void {
-    if (x < 0 or y < 0) return;
+pub fn putPixel(self: *Framebuffer, p: Pixel, c: Color) void {
+    if (p[0] < 0 or p[1] < 0) return;
 
-    const ux: usize = @intCast(x);
-    const uy: usize = @intCast(y);
+    const ux: usize = @intCast(p[0]);
+    const uy: usize = @intCast(p[1]);
 
     if (ux >= self.width or uy >= self.height) return;
 
     const index = (uy * self.width + ux) * 4;
-    self.rgba[index + 0] = r;
-    self.rgba[index + 1] = g;
-    self.rgba[index + 2] = b;
-    self.rgba[index + 3] = 255;
+    self.rgba[index + 0] = c[0];
+    self.rgba[index + 1] = c[1];
+    self.rgba[index + 2] = c[2];
+    self.rgba[index + 3] = c[3];
+}
+
+pub fn putFatPixel(self: *Framebuffer, p: Pixel, light_green: Color) void {
+    self.putPixel(.{ p[0], p[1] }, light_green);
+    self.putPixel(.{ p[0] - 1, p[1] }, light_green);
+    self.putPixel(.{ p[0] + 1, p[1] }, light_green);
+    self.putPixel(.{ p[0] - 1, p[1] + 1 }, light_green);
+    self.putPixel(.{ p[0] + 1, p[1] + 1 }, light_green);
+    self.putPixel(.{ p[0] - 1, p[1] - 1 }, light_green);
+    self.putPixel(.{ p[0] + 1, p[1] - 1 }, light_green);
 }
