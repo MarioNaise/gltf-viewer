@@ -37,6 +37,25 @@ pub fn main(init: std.process.Init) !void {
 
     try gltf.parse(buf);
 
+    const bin: []align(4) const u8 = if (gltf.glb_binary) |embedded| embedded else blk: {
+        if (gltf.data.buffers.len == 0 or gltf.data.buffers[0].uri == null) {
+            std.debug.print("No GLB binary or buffer URI found.\n", .{});
+            return;
+        }
+
+        const dir = if (std.mem.lastIndexOfScalar(u8, gltf_path, '/')) |i| gltf_path[0..i] else ".";
+        const bin_path = try std.fs.path.join(arena, &.{ dir, gltf.data.buffers[0].uri.? });
+
+        break :blk try std.Io.Dir.cwd().readFileAllocOptions(
+            init.io,
+            bin_path,
+            arena,
+            .limited(gltf.data.buffers[0].byte_length + 1),
+            .@"4",
+            null,
+        );
+    };
+
     var fb = try Framebuffer.init(arena, WIDTH, HEIGHT);
     defer fb.deinit();
 
@@ -44,7 +63,7 @@ pub fn main(init: std.process.Init) !void {
 
     var rot: f32 = 0;
     while (true) : (rot = if (rot >= 2 * std.math.pi) 0 else rot + 0.1) {
-        try render.renderGltf(&gltf, &fb, gltf.glb_binary.?, 100, rot);
+        try render.renderGltf(&gltf, &fb, bin, 100, rot);
 
         const encoded = try arena.alloc(u8, std.base64.standard.Encoder.calcSize(fb.rgba.len));
         const payload = std.base64.standard.Encoder.encode(encoded, fb.rgba);
