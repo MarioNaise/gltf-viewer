@@ -65,34 +65,42 @@ pub fn main(init: std.process.Init) !void {
     var fb = try Framebuffer.init(arena, WIDTH, HEIGHT);
     defer fb.deinit();
 
-    print("\x1b[?25l\x1b[s", .{});
-
-    if (DEBUG) {
-        gltf.debugPrint();
-    }
-
+    const MAX_IMAGES: u8 = 25;
     const DISTANCE: f32 = 5;
+    const ROT_DISTANCE: f32 = (std.math.pi * 2) / @as(f32, MAX_IMAGES);
     var ROT_Y: f32 = 0;
-    while (true) : (ROT_Y = if (ROT_Y >= 2 * std.math.pi) 0 else ROT_Y + 0.1) {
+    var ID: u8 = 0;
+
+    print("\x1b[?25l", .{});
+    while (ID < MAX_IMAGES) : (ROT_Y += ROT_DISTANCE) {
+        print("\r                          \r", .{});
+        print("Rendering frame {d}/{d}", .{ ID + 1, MAX_IMAGES });
+        ID += 1;
         try render.renderGltf(&gltf, &fb, DISTANCE, ROT_Y);
 
         const encoded = try arena.alloc(u8, std.base64.standard.Encoder.calcSize(fb.rgba.len));
         const payload = std.base64.standard.Encoder.encode(encoded, fb.rgba);
 
-        print("\x1b_Ga=d\x1b\\\x1b[u", .{});
         print(
-            "\x1b_Gf=32,s={d},v={d},c={d},r={d},a=T;{s}\x1b\\\n",
-            .{ fb.width, fb.height, COL, ROW, payload },
+            "\x1b_Gf=32,s={d},v={d},i={d},q=1;{s}\x1b\\",
+            .{ fb.width, fb.height, ID, payload },
         );
-
-        if (DEBUG)
-            print(
-                "distance :{}, rotY: {}",
-                .{ DISTANCE, ROT_Y },
-            );
 
         arena.free(encoded);
         @memset(fb.rgba, 0);
-        try init.io.sleep(.fromMilliseconds(50), .real);
+    }
+
+    print("\x1b[s\r                          \r", .{});
+    if (DEBUG) {
+        gltf.debugPrint();
+    }
+
+    ID = 1;
+    while (true) : (ID = if (ID >= MAX_IMAGES) 1 else ID + 1) {
+        print(
+            "\x1b[u\x1b_Ga=d\x1b\\\x1b_Ga=p,i={d},c={d},r={d},q=1;\x1b\\\n",
+            .{ ID, COL, ROW },
+        );
+        try init.io.sleep(.fromMilliseconds(100), .real);
     }
 }
