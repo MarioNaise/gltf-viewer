@@ -80,10 +80,12 @@ pub fn putPixel(self: *Framebuffer, p: Pixel, c: Color) void {
 
 pub fn putFatPixel(self: *Framebuffer, p: Pixel, light_green: Color) void {
     self.putPixel(.{ p[0], p[1] }, light_green);
+    self.putPixel(.{ p[0], p[1] - 1 }, light_green);
+    self.putPixel(.{ p[0], p[1] + 1 }, light_green);
     self.putPixel(.{ p[0] - 1, p[1] }, light_green);
-    self.putPixel(.{ p[0] + 1, p[1] }, light_green);
-    self.putPixel(.{ p[0] - 1, p[1] + 1 }, light_green);
-    self.putPixel(.{ p[0] + 1, p[1] + 1 }, light_green);
     self.putPixel(.{ p[0] - 1, p[1] - 1 }, light_green);
+    self.putPixel(.{ p[0] - 1, p[1] + 1 }, light_green);
+    self.putPixel(.{ p[0] + 1, p[1] }, light_green);
     self.putPixel(.{ p[0] + 1, p[1] - 1 }, light_green);
+    self.putPixel(.{ p[0] + 1, p[1] + 1 }, light_green);
 }
