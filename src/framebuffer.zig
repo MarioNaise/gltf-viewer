@@ -28,6 +28,10 @@ pub fn deinit(self: *Framebuffer) void {
     self.allocator.free(self.rgba);
 }
 
+pub fn clear(self: *Framebuffer) void {
+    @memset(self.rgba, 0);
+}
+
 // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
 pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
     var x0 = a[0];
@@ -78,14 +82,14 @@ pub fn putPixel(self: *Framebuffer, p: Pixel, c: Color) void {
     self.rgba[index + 3] = c[3];
 }
 
-pub fn putFatPixel(self: *Framebuffer, p: Pixel, light_green: Color) void {
-    self.putPixel(.{ p[0], p[1] }, light_green);
-    self.putPixel(.{ p[0], p[1] - 1 }, light_green);
-    self.putPixel(.{ p[0], p[1] + 1 }, light_green);
-    self.putPixel(.{ p[0] - 1, p[1] }, light_green);
-    self.putPixel(.{ p[0] - 1, p[1] - 1 }, light_green);
-    self.putPixel(.{ p[0] - 1, p[1] + 1 }, light_green);
-    self.putPixel(.{ p[0] + 1, p[1] }, light_green);
-    self.putPixel(.{ p[0] + 1, p[1] - 1 }, light_green);
-    self.putPixel(.{ p[0] + 1, p[1] + 1 }, light_green);
+pub fn putFatPixel(self: *Framebuffer, p: Pixel, c: Color) void {
+    self.putPixel(.{ p[0], p[1] }, c);
+    self.putPixel(.{ p[0], p[1] - 1 }, c);
+    self.putPixel(.{ p[0], p[1] + 1 }, c);
+    self.putPixel(.{ p[0] - 1, p[1] }, c);
+    self.putPixel(.{ p[0] - 1, p[1] - 1 }, c);
+    self.putPixel(.{ p[0] - 1, p[1] + 1 }, c);
+    self.putPixel(.{ p[0] + 1, p[1] }, c);
+    self.putPixel(.{ p[0] + 1, p[1] - 1 }, c);
+    self.putPixel(.{ p[0] + 1, p[1] + 1 }, c);
 }

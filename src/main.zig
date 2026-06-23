@@ -27,7 +27,7 @@ pub fn main(init: std.process.Init) !void {
 
     const gltf_path = args[1];
 
-    const buf = try std.Io.Dir.cwd().readFileAllocOptions(
+    const file_buf = try std.Io.Dir.cwd().readFileAllocOptions(
         init.io,
         gltf_path,
         arena,
@@ -35,12 +35,12 @@ pub fn main(init: std.process.Init) !void {
         .@"4",
         null,
     );
-    defer arena.free(buf);
+    defer arena.free(file_buf);
 
     var gltf = Gltf.init(arena);
     defer gltf.deinit();
 
-    try gltf.parse(buf);
+    try gltf.parse(file_buf);
 
     const bin: []align(4) const u8 = if (gltf.glb_binary) |embedded| embedded else blk: {
         if (gltf.data.buffers.len == 0 or gltf.data.buffers[0].uri == null) {
@@ -65,32 +65,37 @@ pub fn main(init: std.process.Init) !void {
     var fb = try Framebuffer.init(arena, WIDTH, HEIGHT);
     defer fb.deinit();
 
+    const enc_buf = try arena.alloc(u8, std.base64.standard.Encoder.calcSize(fb.rgba.len));
+    defer arena.free(enc_buf);
+
     const MAX_IMAGES: u8 = 25;
-    const DISTANCE: f32 = 5;
     const ROT_DISTANCE: f32 = (std.math.pi * 2) / @as(f32, MAX_IMAGES);
-    var ROT_Y: f32 = 0;
-    var ID: u8 = 0;
 
-    print("\x1b[?25l", .{});
-    while (ID < MAX_IMAGES) : (ROT_Y += ROT_DISTANCE) {
-        print("\r                          \r", .{});
-        print("Rendering frame {d}/{d}", .{ ID + 1, MAX_IMAGES });
+    var ID: u8 = 1;
+    var ROT: f32 = 0;
+    while (ID <= MAX_IMAGES) : ({
+        ROT += ROT_DISTANCE;
         ID += 1;
-        try render.renderGltf(&gltf, &fb, DISTANCE, ROT_Y);
+    }) {
+        print("\x1b[?25l", .{});
+        print("Rendering frame {d}/{d}\r", .{ ID, MAX_IMAGES });
 
-        const encoded = try arena.alloc(u8, std.base64.standard.Encoder.calcSize(fb.rgba.len));
-        const payload = std.base64.standard.Encoder.encode(encoded, fb.rgba);
+        try render.renderGltf(&gltf, &fb, .{
+            .scale = 1,
+            .pos = .{ 0, -1, 5 },
+            .rot = .{ 0, ROT, 0 },
+        });
+        const payload = std.base64.standard.Encoder.encode(enc_buf, fb.rgba);
 
         print(
             "\x1b_Gf=32,s={d},v={d},i={d},q=1;{s}\x1b\\",
             .{ fb.width, fb.height, ID, payload },
         );
 
-        arena.free(encoded);
-        @memset(fb.rgba, 0);
+        fb.clear();
     }
 
-    print("\x1b[s\r                          \r", .{});
+    print("\r                          \r\x1b[s", .{});
     if (DEBUG) {
         gltf.debugPrint();
     }
@@ -101,6 +106,6 @@ pub fn main(init: std.process.Init) !void {
             "\x1b[u\x1b_Ga=d\x1b\\\x1b_Ga=p,i={d},c={d},r={d},q=1;\x1b\\\n",
             .{ ID, COL, ROW },
         );
-        try init.io.sleep(.fromMilliseconds(100), .real);
+        try init.io.sleep(.fromMilliseconds(200), .real);
     }
 }
