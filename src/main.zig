@@ -60,6 +60,7 @@ pub fn main(init: std.process.Init) !void {
             null,
         );
     };
+    gltf.glb_binary = bin;
 
     var fb = try Framebuffer.init(arena, WIDTH, HEIGHT);
     defer fb.deinit();
@@ -73,7 +74,7 @@ pub fn main(init: std.process.Init) !void {
     const DISTANCE: f32 = 5;
     var ROT_Y: f32 = 0;
     while (true) : (ROT_Y = if (ROT_Y >= 2 * std.math.pi) 0 else ROT_Y + 0.1) {
-        try render.renderGltf(&gltf, &fb, bin, DISTANCE, ROT_Y);
+        try render.renderGltf(&gltf, &fb, DISTANCE, ROT_Y);
 
         const encoded = try arena.alloc(u8, std.base64.standard.Encoder.calcSize(fb.rgba.len));
         const payload = std.base64.standard.Encoder.encode(encoded, fb.rgba);
