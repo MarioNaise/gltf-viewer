@@ -1,7 +1,7 @@
 const std = @import("std");
 const Gltf = @import("zgltf");
-const Framebuffer = @import("framebuffer.zig");
-const render = @import("render.zig");
+const Framebuffer = @import("Framebuffer.zig");
+const Renderer = @import("Renderer.zig");
 
 const print = std.debug.print;
 
@@ -62,6 +62,7 @@ pub fn main(init: std.process.Init) !void {
     };
     gltf.glb_binary = bin;
 
+    var renderer = Renderer.init(arena);
     var fb = try Framebuffer.init(arena, WIDTH, HEIGHT);
     defer fb.deinit();
 
@@ -80,11 +81,15 @@ pub fn main(init: std.process.Init) !void {
         print("\x1b[?25l", .{});
         print("Rendering frame {d}/{d}\r", .{ ID, MAX_IMAGES });
 
-        try render.renderGltf(&gltf, &fb, .{
-            .scale = 1,
-            .pos = .{ 0, -1, 5 },
-            .rot = .{ 0, ROT, 0 },
-        });
+        try renderer.renderGltf(
+            &gltf,
+            &fb,
+            .{
+                .scale = 1,
+                .pos = .{ 0, -1, 5 },
+                .rot = .{ 0, ROT, 0 },
+            },
+        );
         const payload = std.base64.standard.Encoder.encode(enc_buf, fb.rgba);
 
         print(

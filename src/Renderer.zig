@@ -1,0 +1,212 @@
+const std = @import("std");
+const Gltf = @import("zgltf");
+const Framebuffer = @import("Framebuffer.zig");
+const Renderer = @This();
+
+const Vec3 = [3]f32;
+const Mat4 = [4][4]f32;
+const NormalizedCoordinate = [2]f32;
+
+allocator: std.mem.Allocator,
+
+const Config = struct {
+    scale: f32,
+    pos: Vec3,
+    rot: Vec3,
+};
+
+pub fn init(allocator: std.mem.Allocator) Renderer {
+    return Renderer{
+        .allocator = allocator,
+    };
+}
+
+pub fn renderGltf(
+    self: *Renderer,
+    gltf: *Gltf,
+    fb: *Framebuffer,
+    config: Config,
+) !void {
+    if (gltf.data.scene == null or gltf.data.scenes.len == 0) {
+        return error.NoScene;
+    }
+    const scene = gltf.data.scenes[gltf.data.scene.?];
+
+    if (scene.nodes == null or scene.nodes.?.len == 0) {
+        return error.NoNodes;
+    }
+
+    for (scene.nodes.?) |node_index| {
+        try self.renderNode(node_index, gltf, fb, config);
+    }
+}
+
+fn renderNode(self: *Renderer, node_index: usize, gltf: *Gltf, fb: *Framebuffer, config: Config) !void {
+    const node = gltf.data.nodes[node_index];
+
+    for (node.children) |childNode| {
+        try self.renderNode(childNode, gltf, fb, config);
+    }
+
+    if (node.mesh != null) {
+        try self.renderMesh(node_index, gltf, fb, config);
+    }
+}
+
+fn renderMesh(self: *Renderer, node_index: usize, gltf: *Gltf, fb: *Framebuffer, config: Config) !void {
+    const LIGHT_GREEN = Framebuffer.Color{ 100, 255, 100, 255 };
+
+    const node = gltf.data.nodes[node_index];
+    const model = Gltf.getGlobalTransform(&gltf.data, node);
+    const mesh = gltf.data.meshes[node.mesh.?];
+
+    for (mesh.primitives) |primitive| {
+        const idx = getPrimitiveAccessorIndex(primitive) orelse continue;
+
+        var positions = std.ArrayList(Vec3).empty;
+        defer positions.deinit(self.allocator);
+
+        const accessor = gltf.data.accessors[idx];
+        var raw_positions_it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
+        while (raw_positions_it.next()) |pos| {
+            const v = Vec3{ pos[0], pos[1], pos[2] };
+            const transformed = transformVectorGlobal(v, model, config);
+            try positions.append(self.allocator, transformed);
+        }
+
+        if (primitive.indices) |indices_accessor_index| {
+            const indices_accessor = gltf.data.accessors[indices_accessor_index];
+            switch (indices_accessor.component_type) {
+                .unsigned_byte => try self.drawIndices(u8, indices_accessor, gltf, positions.items, fb, LIGHT_GREEN),
+                .unsigned_short => try self.drawIndices(u16, indices_accessor, gltf, positions.items, fb, LIGHT_GREEN),
+                .unsigned_integer => try self.drawIndices(u32, indices_accessor, gltf, positions.items, fb, LIGHT_GREEN),
+                else => {
+                    std.debug.print("Unsupported index component type. {}\n", .{indices_accessor.component_type});
+                },
+            }
+        } else {
+            var i: usize = 0;
+            while (i + 2 < positions.items.len) : (i += 3) {
+                self.drawTriangle(
+                    positions.items[i],
+                    positions.items[i + 1],
+                    positions.items[i + 2],
+                    fb,
+                    LIGHT_GREEN,
+                );
+            }
+        }
+    }
+}
+
+fn drawIndices(self: *Renderer, T: type, accessor: Gltf.Accessor, gltf: *Gltf, positions: []const Vec3, fb: *Framebuffer, color: Framebuffer.Color) !void {
+    const indices = try gltf.getDataFromBufferView(
+        T,
+        self.allocator,
+        accessor,
+        gltf.glb_binary.?,
+    );
+    defer self.allocator.free(indices);
+
+    var i: usize = 0;
+    while (i + 2 < indices.len) : (i += 3) {
+        self.drawTriangle(
+            positions[indices[i]],
+            positions[indices[i + 1]],
+            positions[indices[i + 2]],
+            fb,
+            color,
+        );
+    }
+}
+
+fn drawTriangle(_: *Renderer, a: Vec3, b: Vec3, c: Vec3, fb: *Framebuffer, color: Framebuffer.Color) void {
+    const w: f32 = @floatFromInt(fb.width);
+    const h: f32 = @floatFromInt(fb.height);
+
+    const screen_a = screen(project(a), w, h);
+    const screen_b = screen(project(b), w, h);
+    const screen_c = screen(project(c), w, h);
+
+    fb.drawLine(screen_a, screen_b, color);
+    fb.drawLine(screen_b, screen_c, color);
+    fb.drawLine(screen_c, screen_a, color);
+}
+
+fn getPrimitiveAccessorIndex(primitive: Gltf.Primitive) ?usize {
+    for (primitive.attributes) |attr| {
+        switch (attr) {
+            .position => |idx| {
+                return idx;
+            },
+            else => {},
+        }
+    }
+    return null;
+}
+
+// TODO: use a matrix here
+fn transformVectorGlobal(v: Vec3, model: Mat4, config: Config) Vec3 {
+    const v_mult = transformVector(model, v);
+    const v_rot_y = rotateY(v_mult, config.rot[1]);
+    const v_rot = rotateX(v_rot_y, config.rot[0]);
+    return .{
+        v_rot[0] * config.scale + config.pos[0],
+        v_rot[1] * config.scale + config.pos[1],
+        v_rot[2] * config.scale + config.pos[2],
+    };
+}
+
+/// Maps normalized coordinates to screen coordinates
+/// e.g. -1, -1, 1, 1 -> 0, 0, width, height
+fn screen(p: NormalizedCoordinate, width: f32, height: f32) Framebuffer.Pixel {
+    return .{
+        @trunc((p[0] + 1) / 2 * width),
+        @trunc((1 - (p[1] + 1) / 2) * height),
+    };
+}
+
+// https://www.youtube.com/watch?v=qjWkNZ0SXfo
+/// Maps 3D coordinates to 2D screen coordinates using perspective projection
+/// x' = x / z, y' = y / z
+fn project(v: Vec3) NormalizedCoordinate {
+    const CLIPPING: f32 = 0.1;
+    if (v[2] == 0 or v[2] < CLIPPING) {
+        return .{ -1, -1 };
+    }
+    return .{
+        v[0] / v[2],
+        v[1] / v[2],
+    };
+}
+
+/// Rotates a 3D vector around the X-axis by a given angle.
+fn rotateX(v: Vec3, angle: f32) Vec3 {
+    const cos_a = @cos(angle);
+    const sin_a = @sin(angle);
+    return .{
+        v[0],
+        v[1] * cos_a - v[2] * sin_a,
+        v[1] * sin_a + v[2] * cos_a,
+    };
+}
+
+/// Rotates a 3D vector around the Y-axis by a given angle.
+fn rotateY(v: Vec3, angle: f32) Vec3 {
+    const cos_a = @cos(angle);
+    const sin_a = @sin(angle);
+    return .{
+        v[0] * cos_a - v[2] * sin_a,
+        v[1],
+        v[0] * sin_a + v[2] * cos_a,
+    };
+}
+
+/// Multiplies a 4x4 matrix with a 3D vector, returning the transformed vector.
+fn transformVector(model: Mat4, p: Vec3) Vec3 {
+    return .{
+        model[0][0] * p[0] + model[1][0] * p[1] + model[2][0] * p[2] + model[3][0],
+        model[0][1] * p[0] + model[1][1] * p[1] + model[2][1] * p[2] + model[3][1],
+        model[0][2] * p[0] + model[1][2] * p[1] + model[2][2] * p[2] + model[3][2],
+    };
+}
