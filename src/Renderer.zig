@@ -54,14 +54,22 @@ fn renderNode(self: *Renderer, node_index: usize, gltf: *Gltf, fb: *Framebuffer,
 }
 
 fn renderMesh(self: *Renderer, node_index: usize, gltf: *Gltf, fb: *Framebuffer, config: Config) !void {
-    const LIGHT_GREEN = Framebuffer.Color{ 100, 255, 100, 255 };
-
     const node = gltf.data.nodes[node_index];
     const model = Gltf.getGlobalTransform(&gltf.data, node);
     const mesh = gltf.data.meshes[node.mesh.?];
 
     for (mesh.primitives) |primitive| {
-        const idx = getPrimitiveAccessorIndex(primitive) orelse continue;
+        const idx = blk: {
+            for (primitive.attributes) |attr| {
+                switch (attr) {
+                    .position => |idx| {
+                        break :blk idx;
+                    },
+                    else => {},
+                }
+            }
+            continue;
+        };
 
         var positions = std.ArrayList(Vec3).empty;
         defer positions.deinit(self.allocator);
@@ -74,12 +82,22 @@ fn renderMesh(self: *Renderer, node_index: usize, gltf: *Gltf, fb: *Framebuffer,
             try positions.append(self.allocator, transformed);
         }
 
+        const base_color = if (primitive.material) |material_idx| blk: {
+            const material = gltf.data.materials[material_idx];
+            break :blk Framebuffer.Color{
+                @intFromFloat(material.metallic_roughness.base_color_factor[0] * 100),
+                @intFromFloat(material.metallic_roughness.base_color_factor[1] * 255),
+                @intFromFloat(material.metallic_roughness.base_color_factor[2] * 100),
+                @intFromFloat(material.metallic_roughness.base_color_factor[3] * 255),
+            };
+        } else Framebuffer.Color{ 255, 255, 255, 255 };
+
         if (primitive.indices) |indices_accessor_index| {
             const indices_accessor = gltf.data.accessors[indices_accessor_index];
             switch (indices_accessor.component_type) {
-                .unsigned_byte => try self.drawIndices(u8, indices_accessor, gltf, positions.items, fb, LIGHT_GREEN),
-                .unsigned_short => try self.drawIndices(u16, indices_accessor, gltf, positions.items, fb, LIGHT_GREEN),
-                .unsigned_integer => try self.drawIndices(u32, indices_accessor, gltf, positions.items, fb, LIGHT_GREEN),
+                .unsigned_byte => try self.drawIndices(u8, indices_accessor, gltf, positions.items, fb, base_color),
+                .unsigned_short => try self.drawIndices(u16, indices_accessor, gltf, positions.items, fb, base_color),
+                .unsigned_integer => try self.drawIndices(u32, indices_accessor, gltf, positions.items, fb, base_color),
                 else => {
                     std.debug.print("Unsupported index component type. {}\n", .{indices_accessor.component_type});
                 },
@@ -92,7 +110,7 @@ fn renderMesh(self: *Renderer, node_index: usize, gltf: *Gltf, fb: *Framebuffer,
                     positions.items[i + 1],
                     positions.items[i + 2],
                     fb,
-                    LIGHT_GREEN,
+                    base_color,
                 );
             }
         }
@@ -131,18 +149,6 @@ fn drawTriangle(_: *Renderer, a: Vec3, b: Vec3, c: Vec3, fb: *Framebuffer, color
     fb.drawLine(screen_a, screen_b, color);
     fb.drawLine(screen_b, screen_c, color);
     fb.drawLine(screen_c, screen_a, color);
-}
-
-fn getPrimitiveAccessorIndex(primitive: Gltf.Primitive) ?usize {
-    for (primitive.attributes) |attr| {
-        switch (attr) {
-            .position => |idx| {
-                return idx;
-            },
-            else => {},
-        }
-    }
-    return null;
 }
 
 // TODO: use a matrix here
