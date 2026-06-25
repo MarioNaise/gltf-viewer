@@ -85,9 +85,8 @@ pub fn main(init: std.process.Init) !void {
             &gltf,
             &fb,
             .{
-                .scale = 1,
-                .pos = .{ 0, -1, 5 },
-                .rot = .{ 0, ROT, 0 },
+                .translation = .{ 0, -1, 5 },
+                .rotation = .{ 0, ROT, 0 },
             },
         );
         const payload = std.base64.standard.Encoder.encode(enc_buf, fb.rgba);
