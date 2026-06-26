@@ -10,7 +10,10 @@ rgba: []u8,
 allocator: std.mem.Allocator,
 
 pub fn init(allocator: std.mem.Allocator, width: usize, height: usize) !Framebuffer {
-    const rgba = try allocator.alloc(u8, width * height * 4);
+    const size = width * height * 4;
+    if (size == 0) return error.InvalidDimensions;
+
+    const rgba = try allocator.alloc(u8, size);
     @memset(rgba, 0);
 
     return .{
