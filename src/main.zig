@@ -10,11 +10,6 @@ const exit = std.process.exit;
 pub fn main(init: std.process.Init) !void {
     const arena: std.mem.Allocator = init.arena.allocator();
 
-    if (init.environ_map.get("TMUX") != null) {
-        print("gltv cannot run under TMUX", .{});
-        exit(1);
-    }
-
     const args = try init.minimal.args.toSlice(arena);
     if (args.len < 2) {
         print(flag.USAGE, .{});
@@ -24,6 +19,11 @@ pub fn main(init: std.process.Init) !void {
     const gltf_path = args[1];
 
     const flags = flag.parse(args);
+
+    if (init.environ_map.get("TMUX") != null) {
+        print("gltfv cannot run under TMUX\n", .{});
+        exit(1);
+    }
 
     const io = init.io;
     const cwd = std.Io.Dir.cwd();
