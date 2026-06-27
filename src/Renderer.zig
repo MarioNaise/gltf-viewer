@@ -98,11 +98,10 @@ fn renderMesh(
         const accessor = gltf.data.accessors[idx];
         var raw_positions_it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
         while (raw_positions_it.next()) |pos| {
-            const t = math.transformVector(
+            try positions.append(self.allocator, math.transformVector(
                 global_model,
                 .{ pos[0], pos[1], pos[2] },
-            );
-            try positions.append(self.allocator, t);
+            ));
         }
 
         const base_color = if (primitive.material) |material_idx| blk: {
@@ -142,7 +141,7 @@ fn renderMesh(
 
 fn drawIndices(
     self: *Renderer,
-    T: type,
+    comptime T: type,
     accessor: Gltf.Accessor,
     gltf: *Gltf,
     positions: []const Vec3,
@@ -169,17 +168,23 @@ fn drawIndices(
     }
 }
 
-fn drawTriangle(_: *Renderer, a: Vec3, b: Vec3, c: Vec3, fb: *Framebuffer, color: Framebuffer.Color) void {
+const CLIP_Z: f32 = 0.1;
+
+fn drawTriangle(_: *Renderer, va: Vec3, vb: Vec3, vc: Vec3, fb: *Framebuffer, color: Framebuffer.Color) void {
     const w: f32 = @floatFromInt(fb.width);
     const h: f32 = @floatFromInt(fb.height);
 
-    const screen_a = screen(project(a), w, h);
-    const screen_b = screen(project(b), w, h);
-    const screen_c = screen(project(c), w, h);
+    const a_ok = va[2] > CLIP_Z;
+    const b_ok = vb[2] > CLIP_Z;
+    const c_ok = vc[2] > CLIP_Z;
 
-    fb.drawLine(screen_a, screen_b, color);
-    fb.drawLine(screen_b, screen_c, color);
-    fb.drawLine(screen_c, screen_a, color);
+    const a = if (a_ok) screen(project(va), w, h) else null;
+    const b = if (b_ok) screen(project(vb), w, h) else null;
+    const c = if (c_ok) screen(project(vc), w, h) else null;
+
+    if (a_ok and b_ok) fb.drawLine(a.?, b.?, color);
+    if (b_ok and c_ok) fb.drawLine(b.?, c.?, color);
+    if (c_ok and a_ok) fb.drawLine(c.?, a.?, color);
 }
 
 /// Maps normalized coordinates to screen coordinates
@@ -194,11 +199,9 @@ fn screen(p: NormalizedCoordinate, width: f32, height: f32) Framebuffer.Pixel {
 // https://www.youtube.com/watch?v=qjWkNZ0SXfo
 /// Maps 3D coordinates to 2D screen coordinates using perspective projection
 /// x' = x / z, y' = y / z
+/// Does not check for z == 0
+/// Does not perform clipping
 fn project(v: Vec3) NormalizedCoordinate {
-    const CLIPPING: f32 = 0.1;
-    if (v[2] == 0 or v[2] < CLIPPING) {
-        return .{ -1, -1 };
-    }
     return .{
         v[0] / v[2],
         v[1] / v[2],
