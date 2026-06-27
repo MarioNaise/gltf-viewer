@@ -7,7 +7,6 @@ pub const Color = [4]u8;
 width: usize,
 height: usize,
 rgba: []u8,
-allocator: std.mem.Allocator,
 
 pub fn init(allocator: std.mem.Allocator, width: usize, height: usize) !Framebuffer {
     const size = width * height * 4;
@@ -20,22 +19,23 @@ pub fn init(allocator: std.mem.Allocator, width: usize, height: usize) !Framebuf
         .width = width,
         .height = height,
         .rgba = rgba,
-        .allocator = allocator,
     };
 }
 
-pub fn deinit(self: *Framebuffer) void {
+pub fn deinit(self: *Framebuffer, allocator: std.mem.Allocator) void {
     std.debug.assert(self.rgba.len > 0);
     std.debug.assert(self.rgba.len == self.width * self.height * 4);
 
-    self.allocator.free(self.rgba);
+    allocator.free(self.rgba);
 }
 
+/// Clears the framebuffer by setting all pixels to transparent black (0, 0, 0, 0).
 pub fn clear(self: *Framebuffer) void {
     @memset(self.rgba, 0);
 }
 
 // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
+/// Draws a line from pixel a to pixel b with color c.
 pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
     var x0 = a[0];
     var y0 = a[1];
@@ -52,7 +52,8 @@ pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
     var err = dx + dy;
 
     while (true) {
-        self.putPixel(.{ x0, y0 }, c);
+        if (x0 >= 0 and x0 < self.width and y0 >= 0 and y0 < self.height)
+            self.putPixel(.{ x0, y0 }, c);
 
         const e2 = 2 * err;
 
@@ -70,29 +71,13 @@ pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
     }
 }
 
+/// Writes Color c to the framebuffer at Pixel a.
+/// Does not perform bounds checking!
 pub fn putPixel(self: *Framebuffer, p: Pixel, c: Color) void {
-    if (p[0] < 0 or p[1] < 0) return;
-
-    const ux: usize = @intCast(p[0]);
-    const uy: usize = @intCast(p[1]);
-
-    if (ux >= self.width or uy >= self.height) return;
-
-    const index = (uy * self.width + ux) * 4;
+    const index = (@as(usize, @intCast(p[1])) *
+        self.width + @as(usize, @intCast(p[0]))) * 4;
     self.rgba[index + 0] = c[0];
     self.rgba[index + 1] = c[1];
     self.rgba[index + 2] = c[2];
     self.rgba[index + 3] = c[3];
-}
-
-pub fn putFatPixel(self: *Framebuffer, p: Pixel, c: Color) void {
-    self.putPixel(.{ p[0], p[1] }, c);
-    self.putPixel(.{ p[0], p[1] - 1 }, c);
-    self.putPixel(.{ p[0], p[1] + 1 }, c);
-    self.putPixel(.{ p[0] - 1, p[1] }, c);
-    self.putPixel(.{ p[0] - 1, p[1] - 1 }, c);
-    self.putPixel(.{ p[0] - 1, p[1] + 1 }, c);
-    self.putPixel(.{ p[0] + 1, p[1] }, c);
-    self.putPixel(.{ p[0] + 1, p[1] - 1 }, c);
-    self.putPixel(.{ p[0] + 1, p[1] + 1 }, c);
 }

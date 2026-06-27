@@ -64,7 +64,7 @@ pub fn main(init: std.process.Init) !void {
 
     var renderer = Renderer.init(arena);
     var fb = try Framebuffer.init(arena, flags.pixels, flags.pixels);
-    defer fb.deinit();
+    defer fb.deinit(arena);
 
     const enc_buf = try arena.alloc(u8, std.base64.standard.Encoder.calcSize(fb.rgba.len));
     defer arena.free(enc_buf);
