@@ -14,18 +14,23 @@ pub const USAGE =
     \\  Arguments can be specified in any order and can be combined (e.g. -dly).
     \\  If an argument requires a value, it must be specified after (e.g. -c 80).
     \\
-    \\    -d                Print debug information
-    \\    -l                Loop the animation
+    \\  General:
     \\
+    \\    -D                Print debug information
+    \\    -L                Loop the animation
+    \\
+    \\    -C <number>       Width of frame in terminal columns (affects aspect ratio)
+    \\    -R <number>       Height of frame in terminal rows (affects aspect ratio)
+    \\    -P <number>       Width and height of the output image in pixels
+    \\    -F <number>       Amount of frames to render
+    \\    -T <number>       Timeout between frames in milliseconds
+    \\
+    \\  Model manipulation:
+    \\
+    \\    Rotate 360 degrees around the specified axis over the course of the animation.
     \\    -x                Rotate model around X axis
     \\    -y                Rotate model around Y axis
     \\    -z                Rotate model around Z axis
-    \\
-    \\    -c <number>       Width of frame in terminal columns (affects aspect ratio)
-    \\    -r <number>       Height of frame in terminal rows (affects aspect ratio)
-    \\    -p <number>       Width and height of the output image in pixels
-    \\    -f <number>       Amount of frames to render
-    \\    -T <number>       Timeout between frames in milliseconds
     \\
     \\  Vectors:
     \\  For vector arguments, the value must be specified as a comma-separated list (e.g. -s 1,2,3).
@@ -35,7 +40,9 @@ pub const USAGE =
     \\
     \\    -s <vector>       Scale of the model (default: 1,1,1)
     \\
-    \\    -t <vector>       Translation of the model (default: 0,0,0)
+    \\    -t <vector>       Translation of the model (default: 0,0,5)
+    \\
+    \\    -r <vector>       Rotation of the model in radians (default: 0,0,0)
     \\
     \\    -h / --help       Show this message
     \\
@@ -52,8 +59,9 @@ pub const FlagSet = struct {
     frames: u32 = 1,
     timeout: u32 = 200,
     pixels: usize = 512,
-    scale: Vec3 = .{1} ** 3,
-    translation: Vec3 = .{0} ** 3,
+    scale: Vec3 = .{ 1, 1, 1 },
+    translation: Vec3 = .{ 0, 0, 5 },
+    rotation: Vec3 = .{ 0, 0, 0 },
 };
 
 const err_invalid = "Invalid value '{s}' for argument '{s}'";
@@ -62,27 +70,29 @@ const err_missing = "Value missing for argument '{s}'";
 pub fn parse(args: []const [:0]const u8) FlagSet {
     var flags = FlagSet{};
 
-    for (args, 0..) |arg, i| {
+    outer: for (args, 0..) |arg, i| {
         if (arg.len < 2 or arg[0] != '-') continue;
         for (arg[1..]) |char| {
+            if (char >= '0' and char <= '9') continue :outer;
             switch (char) {
                 'h' => usage(),
                 '-' => if (std.mem.eql(u8, arg[2..], "help"))
                     usage()
                 else
                     errExit("Unknown argument '{s}'", .{arg}),
-                'd' => flags.debug = true,
-                'l' => flags.loop = true,
+                'D' => flags.debug = true,
+                'L' => flags.loop = true,
                 'x' => flags.rotX = true,
                 'y' => flags.rotY = true,
                 'z' => flags.rotZ = true,
-                'c' => flags.col = parseFlagNumber(u8, args[i..]),
-                'r' => flags.row = parseFlagNumber(u8, args[i..]),
-                'f' => flags.frames = parseFlagNumber(u32, args[i..]),
+                'C' => flags.col = parseFlagNumber(u8, args[i..]),
+                'R' => flags.row = parseFlagNumber(u8, args[i..]),
+                'F' => flags.frames = parseFlagNumber(u32, args[i..]),
                 'T' => flags.timeout = parseFlagNumber(u32, args[i..]),
-                'p' => flags.pixels = parseFlagNumber(usize, args[i..]),
-                's' => flags.scale = parseFlagVec3(args[i..], .{1} ** 3),
-                't' => flags.translation = parseFlagVec3(args[i..], .{0} ** 3),
+                'P' => flags.pixels = parseFlagNumber(usize, args[i..]),
+                's' => flags.scale = parseFlagVec3(args[i..], .{ 1, 1, 1 }),
+                't' => flags.translation = parseFlagVec3(args[i..], .{ 0, 0, 5 }),
+                'r' => flags.rotation = parseFlagVec3(args[i..], .{ 0, 0, 0 }),
                 else => errExit("Unknown argument -{c}", .{char}),
             }
         }

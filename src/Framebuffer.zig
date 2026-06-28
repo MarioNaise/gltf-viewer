@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const Framebuffer = @This();
 
 pub const Pixel = [2]i32;
@@ -9,7 +10,7 @@ height: usize,
 rgba: []u8,
 
 pub fn init(allocator: std.mem.Allocator, width: usize, height: usize) !Framebuffer {
-    const size = width * height * 4;
+    const size = width * height * @sizeOf(Framebuffer.Color);
     if (size == 0) return error.InvalidDimensions;
 
     const rgba = try allocator.alloc(u8, size);
@@ -24,7 +25,7 @@ pub fn init(allocator: std.mem.Allocator, width: usize, height: usize) !Framebuf
 
 pub fn deinit(self: *Framebuffer, allocator: std.mem.Allocator) void {
     std.debug.assert(self.rgba.len > 0);
-    std.debug.assert(self.rgba.len == self.width * self.height * 4);
+    std.debug.assert(self.rgba.len == self.width * self.height * @sizeOf(Framebuffer.Color));
 
     allocator.free(self.rgba);
 }

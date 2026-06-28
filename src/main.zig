@@ -1,11 +1,12 @@
 const std = @import("std");
-const Gltf = @import("zgltf");
-const Framebuffer = @import("Framebuffer.zig");
-const Renderer = @import("Renderer.zig");
-const flag = @import("flag.zig");
-
 const print = std.debug.print;
 const exit = std.process.exit;
+
+const Gltf = @import("zgltf");
+
+const flag = @import("flag.zig");
+const Framebuffer = @import("Framebuffer.zig");
+const Renderer = @import("Renderer.zig");
 
 pub fn main(init: std.process.Init) !void {
     const arena: std.mem.Allocator = init.arena.allocator();
@@ -72,11 +73,13 @@ pub fn main(init: std.process.Init) !void {
     var image_id: u8 = 1;
     var rotation: f32 = 0;
 
+    print("\x1b_Ga=d\x1b\\\x1b[?25l\x1b[s", .{});
+    defer print("\x1b[?25h", .{});
+
     while (image_id <= flags.frames) : ({
         rotation += (std.math.pi * 2) / @as(f32, @floatFromInt(flags.frames));
         image_id += 1;
     }) {
-        print("\x1b[?25l", .{});
         print("Rendering frame {d}/{d}\r", .{ image_id, flags.frames });
 
         try renderer.renderGltf(
@@ -86,9 +89,9 @@ pub fn main(init: std.process.Init) !void {
                 .scale = flags.scale,
                 .translation = flags.translation,
                 .rotation = .{
-                    if (flags.rotX) rotation else 0,
-                    if (flags.rotY) rotation else 0,
-                    if (flags.rotZ) rotation else 0,
+                    flags.rotation[0] + if (flags.rotX) rotation else 0,
+                    flags.rotation[1] + if (flags.rotY) rotation else 0,
+                    flags.rotation[2] + if (flags.rotZ) rotation else 0,
                 },
             },
         );
@@ -102,7 +105,7 @@ pub fn main(init: std.process.Init) !void {
         fb.clear();
     }
 
-    print("\r                          \r\x1b[s", .{});
+    print("\r                          \r", .{});
     if (flags.debug) {
         gltf.debugPrint();
     }

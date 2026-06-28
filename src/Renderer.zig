@@ -1,11 +1,13 @@
 const std = @import("std");
+
 const Gltf = @import("zgltf");
+
 const Framebuffer = @import("Framebuffer.zig");
 const math = @import("math.zig");
-const Renderer = @This();
-
 const Vec3 = math.Vec3;
 const Mat4 = math.Mat4;
+
+const Renderer = @This();
 
 const NormalizedCoordinate = [2]f32;
 
