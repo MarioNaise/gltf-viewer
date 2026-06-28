@@ -1,7 +1,5 @@
 const std = @import("std");
 
-const Vec3 = @import("math.zig").Vec3;
-
 pub const USAGE =
     \\GLTF Viewer - A simple GLTF/GLB viewer for the terminal
     \\
@@ -59,9 +57,9 @@ pub const FlagSet = struct {
     frames: u32 = 1,
     timeout: u32 = 200,
     pixels: usize = 512,
-    scale: Vec3 = .{ 1, 1, 1 },
-    translation: Vec3 = .{ 0, 0, 5 },
-    rotation: Vec3 = .{ 0, 0, 0 },
+    scale: [3]f32 = .{ 1, 1, 1 },
+    translation: [3]f32 = .{ 0, 0, 5 },
+    rotation: [3]f32 = .{ 0, 0, 0 },
 };
 
 const err_invalid = "Invalid value '{s}' for argument '{s}'";
@@ -110,12 +108,12 @@ fn errExit(comptime fmt: []const u8, args: anytype) noreturn {
     std.process.exit(1);
 }
 
-fn parseFlagVec3(rest_args: []const [:0]const u8, fallback: Vec3) Vec3 {
+fn parseFlagVec3(rest_args: []const [:0]const u8, fallback: [3]f32) [3]f32 {
     if (rest_args.len < 2) {
         errExit(err_missing, .{rest_args[0]});
     }
 
-    var vec: Vec3 = fallback;
+    var vec: [3]f32 = fallback;
     var it = std.mem.splitScalar(u8, rest_args[1], ',');
 
     var i: usize = 0;
