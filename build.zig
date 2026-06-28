@@ -9,6 +9,8 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
+    const zalgebra_mod = b.dependency("zalgebra", .{});
+
     const exe = b.addExecutable(.{
         .name = "gltfv",
         .root_module = b.createModule(.{
@@ -17,6 +19,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "zgltf", .module = zgltf_mod },
+                .{ .name = "zalgebra", .module = zalgebra_mod.module("zalgebra") },
             },
         }),
     });

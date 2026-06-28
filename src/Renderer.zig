@@ -1,11 +1,11 @@
 const std = @import("std");
 
 const Gltf = @import("zgltf");
+const zalgebra = @import("zalgebra");
+const Vec3 = zalgebra.Vec3;
+const Mat4 = zalgebra.Mat4;
 
 const Framebuffer = @import("Framebuffer.zig");
-const math = @import("math.zig");
-const Vec3 = math.Vec3;
-const Mat4 = math.Mat4;
 
 const Renderer = @This();
 
@@ -14,9 +14,9 @@ const NormalizedCoordinate = [2]f32;
 allocator: std.mem.Allocator,
 
 const Config = struct {
-    scale: Vec3 = .{ 1, 1, 1 },
-    translation: Vec3 = .{ 0, 0, 0 },
-    rotation: Vec3 = .{ 0, 0, 0 },
+    scale: [3]f32 = .{ 1, 1, 1 },
+    translation: [3]f32 = .{ 0, 0, 0 },
+    rotation: [3]f32 = .{ 0, 0, 0 },
 };
 
 pub fn init(allocator: std.mem.Allocator) Renderer {
@@ -40,10 +40,10 @@ pub fn renderGltf(
         return error.NoNodes;
     }
 
-    const world = math.composeMat(
-        config.translation,
-        math.quatFromVec(config.rotation),
-        config.scale,
+    const world = Mat4.recompose(
+        Vec3.fromSlice(&config.translation),
+        Vec3.fromSlice(&config.rotation),
+        Vec3.fromSlice(&config.scale),
     );
     for (scene.nodes.?) |node_index| {
         try self.renderNode(node_index, gltf, fb, world);
@@ -76,10 +76,11 @@ fn renderMesh(
     world: Mat4,
 ) !void {
     const node = gltf.data.nodes[node_index];
-    const object_model = Gltf.getGlobalTransform(&gltf.data, node);
+    const om: [16]f32 = @bitCast(Gltf.getGlobalTransform(&gltf.data, node));
+    const object_model = Mat4.fromSlice(&om);
     const mesh = gltf.data.meshes[node.mesh.?];
 
-    const global_model = math.matMul(world, object_model);
+    const global_model = Mat4.mul(world, object_model);
 
     for (mesh.primitives) |primitive| {
         const idx = blk: {
@@ -100,9 +101,9 @@ fn renderMesh(
         const accessor = gltf.data.accessors[idx];
         var raw_positions_it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
         while (raw_positions_it.next()) |pos| {
-            try positions.append(self.allocator, math.transformVector(
+            try positions.append(self.allocator, Mat4.mulByVec3(
                 global_model,
-                .{ pos[0], pos[1], pos[2] },
+                Vec3.new(pos[0], pos[1], pos[2]),
             ));
         }
 
@@ -178,9 +179,9 @@ fn drawTriangle(_: *Renderer, va: Vec3, vb: Vec3, vc: Vec3, fb: *Framebuffer, co
     const w: f32 = @floatFromInt(fb.width);
     const h: f32 = @floatFromInt(fb.height);
 
-    const a_ok = va[2] > CLIP_Z;
-    const b_ok = vb[2] > CLIP_Z;
-    const c_ok = vc[2] > CLIP_Z;
+    const a_ok = va.z() > CLIP_Z;
+    const b_ok = vb.z() > CLIP_Z;
+    const c_ok = vc.z() > CLIP_Z;
 
     const a = if (a_ok) screen(project(va), w, h) else null;
     const b = if (b_ok) screen(project(vb), w, h) else null;
@@ -191,15 +192,6 @@ fn drawTriangle(_: *Renderer, va: Vec3, vb: Vec3, vc: Vec3, fb: *Framebuffer, co
     if (c_ok and a_ok) fb.drawLine(c.?, a.?, color);
 }
 
-/// Maps normalized coordinates to screen coordinates
-/// e.g. -1, -1, 1, 1 -> 0, 0, width, height
-fn screen(p: NormalizedCoordinate, width: f32, height: f32) Framebuffer.Pixel {
-    return .{
-        @trunc((p[0] + 1) / 2 * width),
-        @trunc((1 - (p[1] + 1) / 2) * height),
-    };
-}
-
 // https://www.youtube.com/watch?v=qjWkNZ0SXfo
 /// Maps 3D coordinates to 2D screen coordinates using perspective projection
 /// x' = x / z, y' = y / z
@@ -207,7 +199,16 @@ fn screen(p: NormalizedCoordinate, width: f32, height: f32) Framebuffer.Pixel {
 /// Does not perform clipping
 fn project(v: Vec3) NormalizedCoordinate {
     return .{
-        v[0] / v[2],
-        v[1] / v[2],
+        v.x() / v.z(),
+        v.y() / v.z(),
+    };
+}
+
+/// Maps normalized coordinates to screen coordinates
+/// e.g. -1, -1, 1, 1 -> 0, 0, width, height
+fn screen(p: NormalizedCoordinate, width: f32, height: f32) Framebuffer.Pixel {
+    return .{
+        @trunc((p[0] + 1) / 2 * width),
+        @trunc((1 - (p[1] + 1) / 2) * height),
     };
 }

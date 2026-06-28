@@ -77,7 +77,7 @@ pub fn main(init: std.process.Init) !void {
     defer print("\x1b[?25h", .{});
 
     while (image_id <= flags.frames) : ({
-        rotation += (std.math.pi * 2) / @as(f32, @floatFromInt(flags.frames));
+        rotation += 360 / @as(f32, @floatFromInt(flags.frames));
         image_id += 1;
     }) {
         print("Rendering frame {d}/{d}\r", .{ image_id, flags.frames });
