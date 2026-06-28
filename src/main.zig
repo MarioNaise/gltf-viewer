@@ -67,7 +67,7 @@ pub fn main(init: std.process.Init) !void {
     var fb = try Framebuffer.init(arena, flags.pixels, flags.pixels);
     defer fb.deinit(arena);
 
-    const enc_buf = try arena.alloc(u8, std.base64.standard.Encoder.calcSize(fb.rgba.len));
+    const enc_buf = try arena.alloc(u8, std.base64.standard.Encoder.calcSize(fb.rgba.len * @sizeOf(Framebuffer.Color)));
     defer arena.free(enc_buf);
 
     var image_id: u8 = 1;
@@ -95,7 +95,7 @@ pub fn main(init: std.process.Init) !void {
                 },
             },
         );
-        const payload = std.base64.standard.Encoder.encode(enc_buf, fb.rgba);
+        const payload = std.base64.standard.Encoder.encode(enc_buf, std.mem.sliceAsBytes(fb.rgba));
 
         print(
             "\x1b_Gf=32,s={d},v={d},i={d},q=1;{s}\x1b\\",

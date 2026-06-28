@@ -3,17 +3,16 @@ const std = @import("std");
 const Framebuffer = @This();
 
 pub const Pixel = [2]i32;
-pub const Color = [4]u8;
+pub const Color = u32;
 
 width: usize,
 height: usize,
-rgba: []u8,
+rgba: []Color,
 
 pub fn init(allocator: std.mem.Allocator, width: usize, height: usize) !Framebuffer {
-    const size = width * height * @sizeOf(Framebuffer.Color);
-    if (size == 0) return error.InvalidDimensions;
+    if (width == 0 or height == 0) return error.InvalidDimensions;
 
-    const rgba = try allocator.alloc(u8, size);
+    const rgba = try allocator.alloc(Color, width * height);
     @memset(rgba, 0);
 
     return .{
@@ -25,7 +24,7 @@ pub fn init(allocator: std.mem.Allocator, width: usize, height: usize) !Framebuf
 
 pub fn deinit(self: *Framebuffer, allocator: std.mem.Allocator) void {
     std.debug.assert(self.rgba.len > 0);
-    std.debug.assert(self.rgba.len == self.width * self.height * @sizeOf(Framebuffer.Color));
+    std.debug.assert(self.rgba.len == self.width * self.height);
 
     allocator.free(self.rgba);
 }
@@ -75,10 +74,7 @@ pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
 /// Writes Color c to the framebuffer at Pixel a.
 /// Does not perform bounds checking!
 pub fn putPixel(self: *Framebuffer, p: Pixel, c: Color) void {
-    const index = (@as(usize, @intCast(p[1])) *
-        self.width + @as(usize, @intCast(p[0]))) * 4;
-    self.rgba[index + 0] = c[0];
-    self.rgba[index + 1] = c[1];
-    self.rgba[index + 2] = c[2];
-    self.rgba[index + 3] = c[3];
+    const index = self.width * (@as(usize, @intCast(p[1]))) +
+        @as(usize, @intCast(p[0]));
+    self.rgba[index] = c;
 }

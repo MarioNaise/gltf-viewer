@@ -108,13 +108,15 @@ fn renderMesh(
 
         const base_color = if (primitive.material) |material_idx| blk: {
             const material = gltf.data.materials[material_idx];
-            break :blk Framebuffer.Color{
-                @intFromFloat(material.metallic_roughness.base_color_factor[0] * 100),
-                @intFromFloat(material.metallic_roughness.base_color_factor[1] * 255),
-                @intFromFloat(material.metallic_roughness.base_color_factor[2] * 100),
-                @intFromFloat(material.metallic_roughness.base_color_factor[3] * 255),
-            };
-        } else Framebuffer.Color{ 255, 255, 255, 255 };
+            const base = material.metallic_roughness.base_color_factor;
+            var col: u32 = 0;
+            for (0..base.len) |i| {
+                col |= @as(u8, @intFromFloat(base[i] * 255));
+                if (i < base.len - 1)
+                    col <<= 8;
+            }
+            break :blk col;
+        } else 0xFFFFFFFF;
 
         if (primitive.indices) |indices_accessor_index| {
             const indices_accessor = gltf.data.accessors[indices_accessor_index];
