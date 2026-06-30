@@ -203,10 +203,10 @@ fn project(v: Vec3) NormalizedCoordinate {
 }
 
 /// Maps normalized coordinates to screen coordinates
-/// e.g. -1, -1, 1, 1 -> 0, 0, width, height
+/// -1, -1, 1, 1 -> -w/2, -h/2, w/2, h/2
 fn screen(p: NormalizedCoordinate, width: f32, height: f32) Framebuffer.Pixel {
     return .{
-        @trunc((p[0] + 1) / 2 * width),
-        @trunc((1 - (p[1] + 1) / 2) * height),
+        @trunc(p[0] * width / 2),
+        @trunc(p[1] * height / 2),
     };
 }

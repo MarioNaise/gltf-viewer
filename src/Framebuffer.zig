@@ -52,7 +52,7 @@ pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
     var err = dx + dy;
 
     while (true) {
-        if (x0 >= 0 and x0 < self.width and y0 >= 0 and y0 < self.height)
+        if (@abs(x0) < self.width / 2 and @abs(y0) < self.height / 2)
             self.putPixel(.{ x0, y0 }, c);
 
         const e2 = 2 * err;
@@ -74,7 +74,5 @@ pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
 /// Writes Color c to the framebuffer at Pixel a.
 /// Does not perform bounds checking!
 pub fn putPixel(self: *Framebuffer, p: Pixel, c: Color) void {
-    const index = self.width * (@as(usize, @intCast(p[1]))) +
-        @as(usize, @intCast(p[0]));
-    self.rgba[index] = c;
+    self.rgba[@as(usize, @intCast(@as(i32, @intCast(self.height / 2)) - 1 - p[1])) * self.width + @as(usize, @intCast(p[0] + @as(i32, @intCast(self.width / 2))))] = c;
 }
