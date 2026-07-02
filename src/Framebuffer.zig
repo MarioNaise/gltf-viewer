@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const InterpolationIterator = @import("InterpolationIterator.zig");
+
 const Framebuffer = @This();
 
 pub const Pixel = [2]i32;
@@ -34,6 +36,43 @@ pub fn clear(self: *Framebuffer) void {
     @memset(self.rgba, 0);
 }
 
+pub fn fillTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, color: Color) void {
+    var ordered = [3]Pixel{ a, b, c };
+    std.sort.block(Pixel, &ordered, {}, struct {
+        pub fn lessThan(_: void, pa: Pixel, pb: Pixel) bool {
+            return pa[1] < pb[1];
+        }
+    }.lessThan);
+
+    const p0 = ordered[0];
+    const p1 = ordered[1];
+    const p2 = ordered[2];
+
+    var it_0: InterpolationIterator = .new(p0[1], p0[0], p1[1], p1[0]);
+    var it_1: InterpolationIterator = .new(p1[1], p1[0], p2[1], p2[0]);
+    var it_2: InterpolationIterator = .new(p0[1], p0[0], p2[1], p2[0]);
+
+    var i: usize = 0;
+    while (true) : (i += 1) {
+        const x02 = it_2.next() orelse break;
+        const x012 = it_0.next() orelse it_1.next() orelse break;
+        const y = p0[1] + @as(i32, @intCast(i));
+
+        var left = @min(x02, x012);
+        const right = @max(x02, x012);
+
+        while (left <= right) : (left += 1) {
+            self.putPixel(.{ left, y }, color);
+        }
+    }
+}
+
+pub fn drawTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, color: Color) void {
+    self.drawLine(a, b, color);
+    self.drawLine(b, c, color);
+    self.drawLine(c, a, color);
+}
+
 // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
 /// Draws a line from pixel a to pixel b with color c.
 pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
@@ -52,8 +91,7 @@ pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
     var err = dx + dy;
 
     while (true) {
-        if (@abs(x0) < self.width / 2 and @abs(y0) < self.height / 2)
-            self.putPixel(.{ x0, y0 }, c);
+        self.putPixel(.{ x0, y0 }, c);
 
         const e2 = 2 * err;
 
@@ -72,9 +110,13 @@ pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
 }
 
 /// Writes Color c to the framebuffer at Pixel a.
-/// Does not perform bounds checking!
 pub fn putPixel(self: *Framebuffer, p: Pixel, c: Color) void {
-    self.rgba[@as(usize, @intCast(@as(i32, @intCast(self.height / 2)) - 1 - p[1])) * self.width + @as(usize, @intCast(p[0] + @as(i32, @intCast(self.width / 2))))] = c;
+    if (@abs(p[0]) >= self.width / 2 or @abs(p[1]) >= self.height / 2) return;
+
+    const idx = @as(usize, @intCast(@as(i32, @intCast(self.height / 2)) - 1 - p[1])) * self.width +
+        @as(usize, @intCast(p[0] + @as(i32, @intCast(self.width / 2))));
+
+    self.rgba[idx] = c;
 }
 
 // https://www.gabrielgambetta.com/computer-graphics-from-scratch/06-lines.html
@@ -107,21 +149,4 @@ pub fn putPixel(self: *Framebuffer, p: Pixel, c: Color) void {
 //                 self.putPixel(.{ val, y0 + @as(i32, @intCast(i)) }, c);
 //         }
 //     }
-// }
-//
-// /// Finds the interpolated value at position between (i_0, d0) and (i_1, d1).
-// fn interPolateAt(i_0: i32, d0: i32, i_1: i32, d1: i32, position: i32) i32 {
-//     if (i_0 == i_1) return d0;
-//
-//     const a = (@as(f32, @floatFromInt(d1 - d0))) / (@as(f32, @floatFromInt(i_1 - i_0)));
-//     const d: f32 = @floatFromInt(d0);
-//     return @round(d + a * @as(f32, @floatFromInt(position)));
-// }
-//
-// // Finds the interpolated value at position between (i_0, d0) and (i_1, _) using the given slope a.
-// fn interPolateAtWithSlope(i_0: i32, d0: i32, i_1: i32, position: i32, a: f32) i32 {
-//     if (i_0 == i_1) return d0;
-//
-//     const d: f32 = @floatFromInt(d0);
-//     return @round(d + a * @as(f32, @floatFromInt(position)));
 // }
