@@ -10,9 +10,11 @@ const Framebuffer = @import("Framebuffer.zig");
 const Renderer = @import("Renderer.zig");
 
 pub fn main(init: std.process.Init) !void {
-    const arena: std.mem.Allocator = init.arena.allocator();
+    const arena = init.arena.allocator();
 
     const args = try init.minimal.args.toSlice(arena);
+    defer arena.free(args);
+
     if (args.len < 2) {
         print(flag.USAGE, .{});
         exit(1);
@@ -52,6 +54,7 @@ pub fn main(init: std.process.Init) !void {
 
         const dir = if (std.mem.lastIndexOfScalar(u8, gltf_path, '/')) |i| gltf_path[0..i] else ".";
         const bin_path = try std.fs.path.join(arena, &.{ dir, gltf.data.buffers[0].uri.? });
+        defer arena.free(bin_path);
 
         break :blk try std.Io.Dir.cwd().readFileAllocOptions(
             io,
@@ -62,6 +65,8 @@ pub fn main(init: std.process.Init) !void {
             null,
         );
     };
+
+    defer arena.free(bin);
     gltf.glb_binary = bin;
 
     var renderer = Renderer.init(arena);
@@ -117,7 +122,7 @@ pub fn main(init: std.process.Init) !void {
 
     image_id = 1;
     const format = "\x1b[u\x1b_Ga=d\x1b\\\x1b_Ga=p,i={d},c={d},r={d},q=1;\x1b\\\n";
-    while (image_id <= flags.frames) : (image_id += 1) {
+    while (image_id <= flags.frames) {
         print(
             format,
             .{ image_id, flags.col, flags.row },
@@ -126,7 +131,8 @@ pub fn main(init: std.process.Init) !void {
 
         try io.sleep(.fromMilliseconds(flags.timeout), .real);
 
-        if (flags.loop and image_id >= flags.frames) image_id = 1 else print(
+        image_id += 1;
+        if (flags.loop and image_id > flags.frames) image_id = 1 else print(
             format,
             .{ 1, flags.col, flags.row },
         );
