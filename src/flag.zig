@@ -152,3 +152,51 @@ fn parseNumber(comptime T: type, str: []const u8) !T {
         },
     }
 }
+
+test "parse" {
+    try std.testing.expectEqual(FlagSet{
+        .debug = true,
+        .loop = true,
+        .rotX = true,
+        .rotY = true,
+        .rotZ = true,
+        .col = 80,
+        .row = 40,
+        .frames = 10,
+        .timeout = 100,
+        .pixels = 1024,
+        .scale = .{ 1, 2, 3 },
+        .translation = .{ 4, 5, 5 },
+        .rotation = .{ 0, 8, 9 },
+    }, parse(&[_][:0]const u8{
+        "",   "-D",   "-L", "-xyz",  "-C", "80",  "-R", "40",   "-F", "10", "-T", "100",
+        "-P", "1024", "-s", "1,2,3", "-t", "4,5", "-r", ",8,9",
+    }));
+}
+
+test "parseFlagVec3" {
+    try std.testing.expectEqual([3]f32{ 1, 2, 3 }, parseFlagVec3(&[_][:0]const u8{ "", "1,2,3" }, .{ 0, 0, 0 }));
+    try std.testing.expectEqual([3]f32{ 1, 1, 1 }, parseFlagVec3(&[_][:0]const u8{ "", "1" }, .{ 0, 0, 0 }));
+    try std.testing.expectEqual([3]f32{ 1, 0, 3 }, parseFlagVec3(&[_][:0]const u8{ "", "1,,3" }, .{ 0, 0, 0 }));
+    try std.testing.expectEqual([3]f32{ 1, 1, 3 }, parseFlagVec3(&[_][:0]const u8{ "", ",,3" }, .{ 1, 1, 1 }));
+}
+
+test "parseFlagNumber" {
+    try std.testing.expectEqual(42, parseFlagNumber(u8, &[_][:0]const u8{ "", "42" }));
+    try std.testing.expectEqual(42, parseFlagNumber(u32, &[_][:0]const u8{ "", "42" }));
+    try std.testing.expectEqual(42, parseFlagNumber(usize, &[_][:0]const u8{ "", "42" }));
+}
+
+test "parseNumber" {
+    const x = parseNumber(i32, "42") catch unreachable;
+    try std.testing.expectEqual(42, x);
+    try std.testing.expectEqual(i32, @TypeOf(x));
+
+    const y = parseNumber(f32, ".42") catch unreachable;
+    try std.testing.expectEqual(0.42, y);
+    try std.testing.expectEqual(f32, @TypeOf(y));
+
+    try std.testing.expectError(error.Overflow, parseNumber(i32, "2147483648"));
+    try std.testing.expectError(error.InvalidCharacter, parseNumber(i32, "2,55"));
+    try std.testing.expectError(error.InvalidCharacter, parseNumber(f32, "2,55"));
+}

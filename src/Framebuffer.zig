@@ -54,8 +54,12 @@ pub fn fillTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, color: Col
 
     var i: usize = 0;
     while (true) : (i += 1) {
+        const x012 = blk: {
+            if (it_0.peekAt(1) == null)
+                break :blk it_1.next() orelse break;
+            break :blk it_0.next() orelse break;
+        };
         const x02 = it_2.next() orelse break;
-        const x012 = it_0.next() orelse it_1.next() orelse break;
         const y = p0[1] + @as(i32, @intCast(i));
 
         var left = @min(x02, x012);
@@ -111,14 +115,101 @@ pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
 
 /// Writes Color c to the framebuffer at Pixel a.
 pub fn putPixel(self: *Framebuffer, p: Pixel, c: Color) void {
-    if (@abs(p[0]) >= self.width / 2 or @abs(p[1]) >= self.height / 2) return;
+    const half_width = @as(i32, @intCast(self.width / 2));
+    const half_height = @as(i32, @intCast(self.height / 2));
 
-    const idx = @as(usize, @intCast(@as(i32, @intCast(self.height / 2)) - 1 - p[1])) * self.width +
+    if (p[1] > half_height or p[1] <= -half_height or
+        p[0] >= half_width or p[0] < -half_width) return;
+
+    const idx = @as(usize, @intCast(@as(i32, @intCast(self.height / 2)) - p[1])) * self.width +
         @as(usize, @intCast(p[0] + @as(i32, @intCast(self.width / 2))));
 
     self.rgba[idx] = c;
 }
 
+test "fillTriangle" {
+    var fb = Framebuffer.init(std.testing.allocator, 10, 10) catch unreachable;
+    defer fb.deinit(std.testing.allocator);
+
+    fb.fillTriangle(.{ -4, 3 }, .{ -4, -3 }, .{ 2, -3 }, 1);
+    fb.fillTriangle(.{ -3, 4 }, .{ 3, 4 }, .{ 3, -2 }, 2);
+
+    try std.testing.expect(std.mem.eql(u32, fb.rgba, &[_]u32{
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 2, 2, 2, 2, 2, 2, 2, 0,
+        0, 1, 0, 2, 2, 2, 2, 2, 2, 0,
+        0, 1, 1, 0, 2, 2, 2, 2, 2, 0,
+        0, 1, 1, 1, 0, 2, 2, 2, 2, 0,
+        0, 1, 1, 1, 1, 0, 2, 2, 2, 0,
+        0, 1, 1, 1, 1, 1, 0, 2, 2, 0,
+        0, 1, 1, 1, 1, 1, 1, 0, 2, 0,
+        0, 1, 1, 1, 1, 1, 1, 1, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    }));
+
+    fb.clear();
+    fb.fillTriangle(.{ -5, 5 }, .{ 4, 5 }, .{ 0, 0 }, 1);
+
+    try std.testing.expect(std.mem.eql(u32, fb.rgba, &[_]u32{
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        0, 1, 1, 1, 1, 1, 1, 1, 1, 0,
+        0, 0, 1, 1, 1, 1, 1, 1, 0, 0,
+        0, 0, 0, 1, 1, 1, 1, 1, 0, 0,
+        0, 0, 0, 0, 1, 1, 1, 0, 0, 0,
+        0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    }));
+}
+
+test "drawTriangle" {
+    var fb = Framebuffer.init(std.testing.allocator, 10, 10) catch unreachable;
+    defer fb.deinit(std.testing.allocator);
+
+    try std.testing.expect(fb.width == 10);
+    try std.testing.expect(fb.height == 10);
+    try std.testing.expect(fb.rgba.len == 100);
+
+    fb.drawTriangle(.{ -5, 5 }, .{ -5, -4 }, .{ 4, -4 }, 1);
+    fb.drawTriangle(.{ -4, 5 }, .{ 4, 5 }, .{ 4, -3 }, 2);
+    try std.testing.expect(std.mem.eql(u32, fb.rgba, &[_]u32{
+        1, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+        1, 1, 2, 0, 0, 0, 0, 0, 0, 2,
+        1, 0, 1, 2, 0, 0, 0, 0, 0, 2,
+        1, 0, 0, 1, 2, 0, 0, 0, 0, 2,
+        1, 0, 0, 0, 1, 2, 0, 0, 0, 2,
+        1, 0, 0, 0, 0, 1, 2, 0, 0, 2,
+        1, 0, 0, 0, 0, 0, 1, 2, 0, 2,
+        1, 0, 0, 0, 0, 0, 0, 1, 2, 2,
+        1, 0, 0, 0, 0, 0, 0, 0, 1, 2,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    }));
+}
+
+test "drawLine" {
+    var fb = Framebuffer.init(std.testing.allocator, 10, 10) catch unreachable;
+    defer fb.deinit(std.testing.allocator);
+    fb.drawLine(.{ -5, 5 }, .{ 4, -4 }, 1);
+    fb.drawLine(.{ 4, 5 }, .{ -5, -4 }, 1);
+    fb.drawLine(.{ -5, 0 }, .{ 4, 0 }, 1);
+    fb.drawLine(.{ 0, 5 }, .{ 0, -4 }, 1);
+    try std.testing.expect(std.mem.eql(u32, fb.rgba, &[_]u32{
+        1, 0, 0, 0, 0, 1, 0, 0, 0, 1,
+        0, 1, 0, 0, 0, 1, 0, 0, 1, 0,
+        0, 0, 1, 0, 0, 1, 0, 1, 0, 0,
+        0, 0, 0, 1, 0, 1, 1, 0, 0, 0,
+        0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        0, 0, 0, 1, 0, 1, 1, 0, 0, 0,
+        0, 0, 1, 0, 0, 1, 0, 1, 0, 0,
+        0, 1, 0, 0, 0, 1, 0, 0, 1, 0,
+        1, 0, 0, 0, 0, 1, 0, 0, 0, 1,
+    }));
+}
+
+// Alternative drawLine implementation using interpolation
 // https://www.gabrielgambetta.com/computer-graphics-from-scratch/06-lines.html
 // pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
 //     const draw_x_axis = @abs(b[0] - a[0]) > @abs(b[1] - a[1]);
