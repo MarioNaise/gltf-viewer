@@ -141,7 +141,7 @@ pub fn main(init: std.process.Init) !void {
 
 test "test" {
     _ = @import("Framebuffer.zig");
-    _ = @import("InterpolationIterator.zig");
+    _ = @import("interpolate.zig");
     _ = @import("Renderer.zig");
     _ = @import("flag.zig");
 }

@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const InterpolationIterator = @import("InterpolationIterator.zig");
+const interpolate = @import("interpolate.zig").interpolate;
 
 const Framebuffer = @This();
 
@@ -48,9 +48,9 @@ pub fn fillTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, color: Col
     const p1 = ordered[1];
     const p2 = ordered[2];
 
-    var it_0: InterpolationIterator = .new(p0[1], p0[0], p1[1], p1[0]);
-    var it_1: InterpolationIterator = .new(p1[1], p1[0], p2[1], p2[0]);
-    var it_2: InterpolationIterator = .new(p0[1], p0[0], p2[1], p2[0]);
+    var it_0 = interpolate(i32, p0[1], p0[0], p1[1], p1[0]);
+    var it_1 = interpolate(i32, p1[1], p1[0], p2[1], p2[0]);
+    var it_2 = interpolate(i32, p0[1], p0[0], p2[1], p2[0]);
 
     var i: usize = 0;
     while (true) : (i += 1) {
