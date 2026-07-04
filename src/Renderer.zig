@@ -185,7 +185,7 @@ fn drawTriangle(_: *Renderer, va: Vec3, vb: Vec3, vc: Vec3, fb: *Framebuffer, co
     const b = if (b_ok) screen(project(vb), w, h) else null;
     const c = if (c_ok) screen(project(vc), w, h) else null;
 
-    if (a_ok and b_ok and c_ok) fb.fillTriangle(a.?, b.?, c.?, color);
+    if (a_ok and b_ok and c_ok) fb.fillShadedTriangle(a.?, b.?, c.?, color);
 
     // if (a_ok and b_ok) fb.drawLine(a.?, b.?, color);
     // if (b_ok and c_ok) fb.drawLine(b.?, c.?, color);

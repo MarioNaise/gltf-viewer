@@ -36,7 +36,7 @@ pub fn clear(self: *Framebuffer) void {
     @memset(self.rgba, 0);
 }
 
-pub fn fillTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, color: Color) void {
+pub fn fillShadedTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, color: Color) void {
     var ordered = [3]Pixel{ a, b, c };
     std.sort.block(Pixel, &ordered, {}, struct {
         pub fn lessThan(_: void, pa: Pixel, pb: Pixel) bool {
@@ -52,6 +52,11 @@ pub fn fillTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, color: Col
     var it_1 = interpolate(i32, p1[1], p1[0], p2[1], p2[0]);
     var it_2 = interpolate(i32, p0[1], p0[0], p2[1], p2[0]);
 
+    // placeholder values
+    var h_it_0 = interpolate(f32, p0[1], 1, p1[1], 1);
+    var h_it_1 = interpolate(f32, p1[1], 1, p2[1], 1);
+    var h_it_2 = interpolate(f32, p0[1], 1, p2[1], 1);
+
     var i: usize = 0;
     while (true) : (i += 1) {
         const x012 = blk: {
@@ -60,15 +65,44 @@ pub fn fillTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, color: Col
             break :blk it_0.next() orelse break;
         };
         const x02 = it_2.next() orelse break;
+
+        const h012 = blk: {
+            if (h_it_0.peekAt(1) == null)
+                break :blk h_it_1.next() orelse break;
+            break :blk h_it_0.next() orelse break;
+        };
+        const h02 = h_it_2.next() orelse break;
+
         const y = p0[1] + @as(i32, @intCast(i));
 
         var left = @min(x02, x012);
         const right = @max(x02, x012);
+        const h_left = if (x02 < x012) h02 else h012;
+        const h_right = if (x02 < x012) h012 else h02;
+
+        var h_segment = interpolate(
+            f32,
+            left,
+            h_left,
+            right,
+            h_right,
+        );
 
         while (left <= right) : (left += 1) {
-            self.putPixel(.{ left, y }, color);
+            self.putPixel(.{ left, y }, multiplyColor(color, h_segment.next() orelse 1));
         }
     }
+}
+
+fn multiplyColor(c: Color, factor: f32) Color {
+    var buf = [_]u8{0} ** 4;
+    std.mem.writeInt(u32, &buf, c, .big);
+    return std.mem.readInt(u32, &[_]u8{
+        @trunc(buf[0] * factor),
+        @trunc(buf[1] * factor),
+        @trunc(buf[2] * factor),
+        buf[3],
+    }, .big);
 }
 
 pub fn drawTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, color: Color) void {
@@ -127,12 +161,12 @@ pub fn putPixel(self: *Framebuffer, p: Pixel, c: Color) void {
     self.rgba[idx] = c;
 }
 
-test "fillTriangle" {
+test "fillShadedTriangle" {
     var fb = Framebuffer.init(std.testing.allocator, 10, 10) catch unreachable;
     defer fb.deinit(std.testing.allocator);
 
-    fb.fillTriangle(.{ -4, 3 }, .{ -4, -3 }, .{ 2, -3 }, 1);
-    fb.fillTriangle(.{ -3, 4 }, .{ 3, 4 }, .{ 3, -2 }, 2);
+    fb.fillShadedTriangle(.{ -4, 3 }, .{ -4, -3 }, .{ 2, -3 }, 1);
+    fb.fillShadedTriangle(.{ -3, 4 }, .{ 3, 4 }, .{ 3, -2 }, 2);
 
     try std.testing.expect(std.mem.eql(u32, fb.rgba, &[_]u32{
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -148,7 +182,7 @@ test "fillTriangle" {
     }));
 
     fb.clear();
-    fb.fillTriangle(.{ -5, 5 }, .{ 4, 5 }, .{ 0, 0 }, 1);
+    fb.fillShadedTriangle(.{ -5, 5 }, .{ 4, 5 }, .{ 0, 0 }, 1);
 
     try std.testing.expect(std.mem.eql(u32, fb.rgba, &[_]u32{
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
