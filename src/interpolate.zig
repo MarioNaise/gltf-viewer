@@ -1,5 +1,3 @@
-const std = @import("std");
-
 pub fn interpolate(comptime T: type, i_0: i32, d0: T, i_1: i32, d1: T) LerpIterator(T) {
     const is_float = comptime isFloat(T);
 
@@ -83,38 +81,39 @@ fn isFloat(comptime T: type) bool {
 }
 
 test "LerpIterator" {
+    const expectEql = @import("std").testing.expectEqual;
     var it = interpolate(i32, 0, 0, 10, 100);
-    try std.testing.expectEqual(it.next(), 0);
-    try std.testing.expectEqual(it.next(), 10);
-    try std.testing.expectEqual(it.next(), 20);
-    try std.testing.expectEqual(it.next(), 30);
-    try std.testing.expectEqual(it.next(), 40);
-    try std.testing.expectEqual(it.next(), 50);
-    try std.testing.expectEqual(it.next(), 60);
-    try std.testing.expectEqual(it.next(), 70);
-    try std.testing.expectEqual(it.next(), 80);
-    try std.testing.expectEqual(it.next(), 90);
-    try std.testing.expectEqual(it.next(), 100);
-    try std.testing.expectEqual(it.next(), null);
+    try expectEql(0, it.next());
+    try expectEql(10, it.next());
+    try expectEql(20, it.next());
+    try expectEql(30, it.next());
+    try expectEql(40, it.next());
+    try expectEql(50, it.next());
+    try expectEql(60, it.next());
+    try expectEql(70, it.next());
+    try expectEql(80, it.next());
+    try expectEql(90, it.next());
+    try expectEql(100, it.next());
+    try expectEql(null, it.next());
 
     it.reset();
-    try std.testing.expectEqual(it.peek(), 0);
+    try expectEql(0, it.peek());
 
     it.resetInit(5, 50, 15, 70);
-    try std.testing.expectEqual(it.peek(), 50);
-    try std.testing.expectEqual(it.next(), 50);
-    try std.testing.expectEqual(it.next(), 52);
+    try expectEql(50, it.peek());
+    try expectEql(50, it.next());
+    try expectEql(52, it.next());
 
     it.resetInit(5, 50, 5, 70);
-    try std.testing.expectEqual(it.next(), 50);
-    try std.testing.expectEqual(it.next(), null);
+    try expectEql(50, it.next());
+    try expectEql(null, it.next());
 
     var it2 = interpolate(f32, 0, 0, 5, 1);
-    try std.testing.expectEqual(it2.next(), 0);
-    try std.testing.expectEqual(it2.next(), 0.2);
-    try std.testing.expectEqual(it2.next(), 0.4);
-    try std.testing.expectEqual(it2.next(), 0.6);
-    try std.testing.expectEqual(it2.next(), 0.8);
-    try std.testing.expectEqual(it2.next(), 1.0);
-    try std.testing.expectEqual(it2.next(), null);
+    try expectEql(0, it2.next());
+    try expectEql(0.2, it2.next());
+    try expectEql(0.4, it2.next());
+    try expectEql(0.6, it2.next());
+    try expectEql(0.8, it2.next());
+    try expectEql(1.0, it2.next());
+    try expectEql(null, it2.next());
 }

@@ -175,28 +175,35 @@ test "parse" {
 }
 
 test "parseFlagVec3" {
-    try std.testing.expectEqual([3]f32{ 1, 2, 3 }, parseFlagVec3(&[_][:0]const u8{ "", "1,2,3" }, .{ 0, 0, 0 }));
-    try std.testing.expectEqual([3]f32{ 1, 1, 1 }, parseFlagVec3(&[_][:0]const u8{ "", "1" }, .{ 0, 0, 0 }));
-    try std.testing.expectEqual([3]f32{ 1, 0, 3 }, parseFlagVec3(&[_][:0]const u8{ "", "1,,3" }, .{ 0, 0, 0 }));
-    try std.testing.expectEqual([3]f32{ 1, 1, 3 }, parseFlagVec3(&[_][:0]const u8{ "", ",,3" }, .{ 1, 1, 1 }));
+    const expectEql = std.testing.expectEqual;
+
+    try expectEql([3]f32{ 1, 2, 3 }, parseFlagVec3(&[_][:0]const u8{ "", "1,2,3" }, .{ 0, 0, 0 }));
+    try expectEql([3]f32{ 1, 1, 1 }, parseFlagVec3(&[_][:0]const u8{ "", "1" }, .{ 0, 0, 0 }));
+    try expectEql([3]f32{ 1, 0, 3 }, parseFlagVec3(&[_][:0]const u8{ "", "1,,3" }, .{ 0, 0, 0 }));
+    try expectEql([3]f32{ 1, 1, 3 }, parseFlagVec3(&[_][:0]const u8{ "", ",,3" }, .{ 1, 1, 1 }));
 }
 
 test "parseFlagNumber" {
-    try std.testing.expectEqual(42, parseFlagNumber(u8, &[_][:0]const u8{ "", "42" }));
-    try std.testing.expectEqual(42, parseFlagNumber(u32, &[_][:0]const u8{ "", "42" }));
-    try std.testing.expectEqual(42, parseFlagNumber(usize, &[_][:0]const u8{ "", "42" }));
+    const expectEql = std.testing.expectEqual;
+
+    try expectEql(42, parseFlagNumber(u8, &[_][:0]const u8{ "", "42" }));
+    try expectEql(42, parseFlagNumber(u32, &[_][:0]const u8{ "", "42" }));
+    try expectEql(42, parseFlagNumber(usize, &[_][:0]const u8{ "", "42" }));
 }
 
 test "parseNumber" {
+    const expectEql = std.testing.expectEqual;
+    const expectError = std.testing.expectError;
+
     const x = parseNumber(i32, "42") catch unreachable;
-    try std.testing.expectEqual(42, x);
-    try std.testing.expectEqual(i32, @TypeOf(x));
+    try expectEql(42, x);
+    try expectEql(i32, @TypeOf(x));
 
     const y = parseNumber(f32, ".42") catch unreachable;
-    try std.testing.expectEqual(0.42, y);
-    try std.testing.expectEqual(f32, @TypeOf(y));
+    try expectEql(0.42, y);
+    try expectEql(f32, @TypeOf(y));
 
-    try std.testing.expectError(error.Overflow, parseNumber(i32, "2147483648"));
-    try std.testing.expectError(error.InvalidCharacter, parseNumber(i32, "2,55"));
-    try std.testing.expectError(error.InvalidCharacter, parseNumber(f32, "2,55"));
+    try expectError(error.Overflow, parseNumber(i32, "2147483648"));
+    try expectError(error.InvalidCharacter, parseNumber(i32, "2,55"));
+    try expectError(error.InvalidCharacter, parseNumber(f32, "2,55"));
 }
