@@ -102,7 +102,7 @@ pub fn main(init: std.process.Init) !void {
             },
         );
 
-        const payload = std.base64.standard.Encoder.encode(enc_buf, std.mem.sliceAsBytes(fb.rgba));
+        const payload = std.base64.standard.Encoder.encode(enc_buf, fb.asBytes());
 
         print(
             "\x1b_Gf=32,s={d},v={d},i={d},q=1;{s}\x1b\\",

@@ -36,6 +36,10 @@ pub fn clear(self: *Framebuffer) void {
     @memset(self.rgba, Color.transparent());
 }
 
+pub fn asBytes(self: Framebuffer) []u8 {
+    return std.mem.sliceAsBytes(self.rgba);
+}
+
 pub fn fillShadedTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, color: Color) void {
     var ordered = [3]Pixel{ a, b, c };
     std.sort.block(Pixel, &ordered, {}, struct {
@@ -160,7 +164,7 @@ test "fillShadedTriangle" {
     fb.fillShadedTriangle(.{ -4, 3 }, .{ -4, -3 }, .{ 2, -3 }, c1);
     fb.fillShadedTriangle(.{ -3, 4 }, .{ 3, 4 }, .{ 3, -2 }, c2);
 
-    try std.testing.expect(std.mem.eql(u8, std.mem.sliceAsBytes(fb.rgba), std.mem.sliceAsBytes(&[_]Color{
+    try std.testing.expect(std.mem.eql(u8, fb.asBytes(), std.mem.sliceAsBytes(&[_]Color{
         c0, c0, c0, c0, c0, c0, c0, c0, c0, c0,
         c0, c0, c2, c2, c2, c2, c2, c2, c2, c0,
         c0, c1, c0, c2, c2, c2, c2, c2, c2, c0,
@@ -176,7 +180,7 @@ test "fillShadedTriangle" {
     fb.clear();
     fb.fillShadedTriangle(.{ -5, 5 }, .{ 4, 5 }, .{ 0, 0 }, c1);
 
-    try std.testing.expect(std.mem.eql(u8, std.mem.sliceAsBytes(fb.rgba), std.mem.sliceAsBytes(&[_]Color{
+    try std.testing.expect(std.mem.eql(u8, fb.asBytes(), std.mem.sliceAsBytes(&[_]Color{
         c1, c1, c1, c1, c1, c1, c1, c1, c1, c1,
         c0, c1, c1, c1, c1, c1, c1, c1, c1, c0,
         c0, c0, c1, c1, c1, c1, c1, c1, c0, c0,
@@ -203,7 +207,7 @@ test "drawTriangle" {
 
     fb.drawTriangle(.{ -5, 5 }, .{ -5, -4 }, .{ 4, -4 }, c1);
     fb.drawTriangle(.{ -4, 5 }, .{ 4, 5 }, .{ 4, -3 }, c2);
-    try std.testing.expect(std.mem.eql(u8, std.mem.sliceAsBytes(fb.rgba), std.mem.sliceAsBytes(&[_]Color{
+    try std.testing.expect(std.mem.eql(u8, fb.asBytes(), std.mem.sliceAsBytes(&[_]Color{
         c1, c2, c2, c2, c2, c2, c2, c2, c2, c2,
         c1, c1, c2, c0, c0, c0, c0, c0, c0, c2,
         c1, c0, c1, c2, c0, c0, c0, c0, c0, c2,
@@ -226,7 +230,7 @@ test "drawLine" {
     fb.drawLine(.{ 4, 5 }, .{ -5, -4 }, c1);
     fb.drawLine(.{ -5, 0 }, .{ 4, 0 }, c1);
     fb.drawLine(.{ 0, 5 }, .{ 0, -4 }, c1);
-    try std.testing.expect(std.mem.eql(u8, std.mem.sliceAsBytes(fb.rgba), std.mem.sliceAsBytes(&[_]Color{
+    try std.testing.expect(std.mem.eql(u8, fb.asBytes(), std.mem.sliceAsBytes(&[_]Color{
         c1, c0, c0, c0, c0, c1, c0, c0, c0, c1,
         c0, c1, c0, c0, c0, c1, c0, c0, c1, c0,
         c0, c0, c1, c0, c0, c1, c0, c1, c0, c0,
@@ -240,35 +244,18 @@ test "drawLine" {
     })));
 }
 
-// Alternative drawLine implementation using interpolation
-// https://www.gabrielgambetta.com/computer-graphics-from-scratch/06-lines.html
-// pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
-//     const draw_x_axis = @abs(b[0] - a[0]) > @abs(b[1] - a[1]);
-//     const swap = draw_x_axis and a[0] > b[0] or !draw_x_axis and a[1] > b[1];
-//
-//     const x0 = if (swap) b[0] else a[0];
-//     const y0 = if (swap) b[1] else a[1];
-//     const x1 = if (swap) a[0] else b[0];
-//     const y1 = if (swap) a[1] else b[1];
-//
-//     var i: usize = 0;
-//     if (draw_x_axis) {
-//         const slope = (@as(f32, @floatFromInt(y1 - y0))) / (@as(f32, @floatFromInt(x1 - x0)));
-//         while (x0 + @as(i32, @intCast(i)) <= x1) : (i += 1) {
-//             if (@abs(x0 + @as(i32, @intCast(i))) >= self.width / 2) continue;
-//
-//             const val = interPolateAtWithSlope(x0, y0, x1, @intCast(i), slope);
-//             if (val < self.height / 2)
-//                 self.putPixel(.{ x0 + @as(i32, @intCast(i)), val }, c);
-//         }
-//     } else {
-//         const slope = (@as(f32, @floatFromInt(x1 - x0))) / (@as(f32, @floatFromInt(y1 - y0)));
-//         while (y0 + @as(i32, @intCast(i)) <= y1) : (i += 1) {
-//             if (@abs(y0 + @as(i32, @intCast(i))) >= self.height / 2) continue;
-//
-//             const val = interPolateAtWithSlope(y0, x0, y1, @intCast(i), slope);
-//             if (@abs(val) < self.width / 2)
-//                 self.putPixel(.{ val, y0 + @as(i32, @intCast(i)) }, c);
-//         }
-//     }
-// }
+test "asBytes" {
+    var fb = Framebuffer.init(std.testing.allocator, 2, 2) catch unreachable;
+    defer fb.deinit(std.testing.allocator);
+
+    fb.putPixel(.{ -1, 1 }, Color.new(0xFF, 0x00, 0x00, 0xFF));
+    fb.putPixel(.{ 0, 1 }, Color.new(0x00, 0xFF, 0x00, 0xFF));
+    fb.putPixel(.{ -1, 0 }, Color.new(0x00, 0x00, 0xFF, 0xFF));
+    fb.putPixel(.{ 0, 0 }, Color.new(0xFF, 0xFF, 0x00, 0x80));
+    try std.testing.expect(std.mem.eql(u8, fb.asBytes(), &[_]u8{
+        0xFF, 0x00, 0x00, 0xFF,
+        0x00, 0xFF, 0x00, 0xFF,
+        0x00, 0x00, 0xFF, 0xFF,
+        0xFF, 0xFF, 0x00, 0x80,
+    }));
+}
