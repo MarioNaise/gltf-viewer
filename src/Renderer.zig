@@ -5,12 +5,11 @@ const zalgebra = @import("zalgebra");
 const Vec3 = zalgebra.Vec3;
 const Mat4 = zalgebra.Mat4;
 
-const Framebuffer = @import("Framebuffer.zig");
 const Color = @import("Color.zig");
+const Framebuffer = @import("Framebuffer.zig");
+const Pixel = Framebuffer.Pixel;
 
 const Renderer = @This();
-
-const NormalizedCoordinate = [2]f32;
 
 allocator: std.mem.Allocator,
 
@@ -176,41 +175,15 @@ fn drawIndices(
 const CLIP_Z: f32 = 0.1;
 
 fn drawTriangle(_: *Renderer, va: Vec3, vb: Vec3, vc: Vec3, fb: *Framebuffer, color: Color) void {
-    const w: f32 = @floatFromInt(fb.width);
-    const h: f32 = @floatFromInt(fb.height);
+    if (va.z() < CLIP_Z or vb.z() < CLIP_Z or vc.z() < CLIP_Z) return;
 
-    const a_ok = va.z() > CLIP_Z;
-    const b_ok = vb.z() > CLIP_Z;
-    const c_ok = vc.z() > CLIP_Z;
+    const a = Pixel.fromVec3(va, fb.width, fb.height);
+    const b = Pixel.fromVec3(vb, fb.width, fb.height);
+    const c = Pixel.fromVec3(vc, fb.width, fb.height);
 
-    const a = if (a_ok) screen(project(va), w, h) else null;
-    const b = if (b_ok) screen(project(vb), w, h) else null;
-    const c = if (c_ok) screen(project(vc), w, h) else null;
-
-    if (a_ok and b_ok and c_ok) fb.fillShadedTriangle(a.?, b.?, c.?, color);
+    fb.fillShadedTriangle(a, b, c, color);
 
     // if (a_ok and b_ok) fb.drawLine(a.?, b.?, color);
     // if (b_ok and c_ok) fb.drawLine(b.?, c.?, color);
     // if (c_ok and a_ok) fb.drawLine(c.?, a.?, color);
-}
-
-// https://www.youtube.com/watch?v=qjWkNZ0SXfo
-/// Maps 3D coordinates to 2D screen coordinates using perspective projection
-/// x' = x / z, y' = y / z
-/// Does not check for z == 0
-/// Does not perform clipping
-fn project(v: Vec3) NormalizedCoordinate {
-    return .{
-        v.x() / v.z(),
-        v.y() / v.z(),
-    };
-}
-
-/// Maps normalized coordinates to screen coordinates
-/// -1, -1, 1, 1 -> -w/2, -h/2, w/2, h/2
-fn screen(p: NormalizedCoordinate, width: f32, height: f32) Framebuffer.Pixel {
-    return .{
-        @trunc(p[0] * width / 2),
-        @trunc(p[1] * height / 2),
-    };
 }
