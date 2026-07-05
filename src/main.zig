@@ -1,10 +1,10 @@
 const std = @import("std");
 const print = std.debug.print;
 const exit = std.process.exit;
-const builtin = @import("builtin");
 
 const Gltf = @import("zgltf");
 
+const Color = @import("Color.zig");
 const flag = @import("flag.zig");
 const Framebuffer = @import("Framebuffer.zig");
 const Renderer = @import("Renderer.zig");
@@ -73,7 +73,7 @@ pub fn main(init: std.process.Init) !void {
     var fb = try Framebuffer.init(arena, flags.pixels, flags.pixels);
     defer fb.deinit(arena);
 
-    const enc_buf = try arena.alloc(u8, std.base64.standard.Encoder.calcSize(fb.rgba.len * @sizeOf(Framebuffer.Color)));
+    const enc_buf = try arena.alloc(u8, std.base64.standard.Encoder.calcSize(fb.rgba.len * @sizeOf(Color)));
     defer arena.free(enc_buf);
 
     var image_id: u8 = 1;
@@ -102,9 +102,6 @@ pub fn main(init: std.process.Init) !void {
             },
         );
 
-        if (builtin.cpu.arch.endian() == .little) {
-            std.mem.byteSwapAllElements(u32, fb.rgba);
-        }
         const payload = std.base64.standard.Encoder.encode(enc_buf, std.mem.sliceAsBytes(fb.rgba));
 
         print(
@@ -140,6 +137,7 @@ pub fn main(init: std.process.Init) !void {
 }
 
 test "test" {
+    _ = @import("Color.zig");
     _ = @import("Framebuffer.zig");
     _ = @import("interpolate.zig");
     _ = @import("Renderer.zig");

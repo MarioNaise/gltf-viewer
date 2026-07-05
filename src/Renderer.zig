@@ -6,6 +6,7 @@ const Vec3 = zalgebra.Vec3;
 const Mat4 = zalgebra.Mat4;
 
 const Framebuffer = @import("Framebuffer.zig");
+const Color = @import("Color.zig");
 
 const Renderer = @This();
 
@@ -109,13 +110,14 @@ fn renderMesh(
 
         const base_color = if (primitive.material) |material_idx| blk: {
             const material = gltf.data.materials[material_idx];
-            break :blk std.mem.readInt(u32, &[_]u8{
-                @trunc(0xFF * material.metallic_roughness.base_color_factor[0]),
-                @trunc(0xFF * material.metallic_roughness.base_color_factor[1]),
-                @trunc(0xFF * material.metallic_roughness.base_color_factor[2]),
-                @trunc(0xFF * material.metallic_roughness.base_color_factor[3]),
-            }, .big);
-        } else 0xFFFFFFFF;
+            const bcf = material.metallic_roughness.base_color_factor;
+            break :blk Color.new(
+                @trunc(0xFF * bcf[0]),
+                @trunc(0xFF * bcf[1]),
+                @trunc(0xFF * bcf[2]),
+                @trunc(0xFF * bcf[3]),
+            );
+        } else Color.white();
 
         if (primitive.indices) |indices_accessor_index| {
             const indices_accessor = gltf.data.accessors[indices_accessor_index];
@@ -149,7 +151,7 @@ fn drawIndices(
     gltf: *Gltf,
     positions: []const Vec3,
     fb: *Framebuffer,
-    color: Framebuffer.Color,
+    color: Color,
 ) !void {
     const indices = try gltf.getDataFromBufferView(
         T,
@@ -173,7 +175,7 @@ fn drawIndices(
 
 const CLIP_Z: f32 = 0.1;
 
-fn drawTriangle(_: *Renderer, va: Vec3, vb: Vec3, vc: Vec3, fb: *Framebuffer, color: Framebuffer.Color) void {
+fn drawTriangle(_: *Renderer, va: Vec3, vb: Vec3, vc: Vec3, fb: *Framebuffer, color: Color) void {
     const w: f32 = @floatFromInt(fb.width);
     const h: f32 = @floatFromInt(fb.height);
 

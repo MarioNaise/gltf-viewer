@@ -1,11 +1,11 @@
 const std = @import("std");
 
+const Color = @import("Color.zig");
 const interpolate = @import("interpolate.zig").interpolate;
 
 const Framebuffer = @This();
 
 pub const Pixel = [2]i32;
-pub const Color = u32;
 
 width: usize,
 height: usize,
@@ -15,7 +15,7 @@ pub fn init(allocator: std.mem.Allocator, width: usize, height: usize) !Framebuf
     if (width == 0 or height == 0) return error.InvalidDimensions;
 
     const rgba = try allocator.alloc(Color, width * height);
-    @memset(rgba, 0);
+    @memset(rgba, Color.transparent());
 
     return .{
         .width = width,
@@ -33,7 +33,7 @@ pub fn deinit(self: *Framebuffer, allocator: std.mem.Allocator) void {
 
 /// Clears the framebuffer by setting all pixels to transparent black (0, 0, 0, 0).
 pub fn clear(self: *Framebuffer) void {
-    @memset(self.rgba, 0);
+    @memset(self.rgba, Color.transparent());
 }
 
 pub fn fillShadedTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, color: Color) void {
@@ -89,20 +89,9 @@ pub fn fillShadedTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, colo
         );
 
         while (left <= right) : (left += 1) {
-            self.putPixel(.{ left, y }, multiplyColor(color, h_segment.next() orelse 1));
+            self.putPixel(.{ left, y }, color.mul(h_segment.next() orelse 1));
         }
     }
-}
-
-fn multiplyColor(c: Color, factor: f32) Color {
-    var buf = [_]u8{0} ** 4;
-    std.mem.writeInt(u32, &buf, c, .big);
-    return std.mem.readInt(u32, &[_]u8{
-        @trunc(buf[0] * factor),
-        @trunc(buf[1] * factor),
-        @trunc(buf[2] * factor),
-        buf[3],
-    }, .big);
 }
 
 pub fn drawTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, color: Color) void {
@@ -164,83 +153,91 @@ pub fn putPixel(self: *Framebuffer, p: Pixel, c: Color) void {
 test "fillShadedTriangle" {
     var fb = Framebuffer.init(std.testing.allocator, 10, 10) catch unreachable;
     defer fb.deinit(std.testing.allocator);
+    const c0 = Color.transparent();
+    const c1 = Color.new(0, 0, 0, 1);
+    const c2 = Color.new(0, 0, 0, 2);
 
-    fb.fillShadedTriangle(.{ -4, 3 }, .{ -4, -3 }, .{ 2, -3 }, 1);
-    fb.fillShadedTriangle(.{ -3, 4 }, .{ 3, 4 }, .{ 3, -2 }, 2);
+    fb.fillShadedTriangle(.{ -4, 3 }, .{ -4, -3 }, .{ 2, -3 }, c1);
+    fb.fillShadedTriangle(.{ -3, 4 }, .{ 3, 4 }, .{ 3, -2 }, c2);
 
-    try std.testing.expect(std.mem.eql(u32, fb.rgba, &[_]u32{
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 2, 2, 2, 2, 2, 2, 2, 0,
-        0, 1, 0, 2, 2, 2, 2, 2, 2, 0,
-        0, 1, 1, 0, 2, 2, 2, 2, 2, 0,
-        0, 1, 1, 1, 0, 2, 2, 2, 2, 0,
-        0, 1, 1, 1, 1, 0, 2, 2, 2, 0,
-        0, 1, 1, 1, 1, 1, 0, 2, 2, 0,
-        0, 1, 1, 1, 1, 1, 1, 0, 2, 0,
-        0, 1, 1, 1, 1, 1, 1, 1, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    }));
+    try std.testing.expect(std.mem.eql(u8, std.mem.sliceAsBytes(fb.rgba), std.mem.sliceAsBytes(&[_]Color{
+        c0, c0, c0, c0, c0, c0, c0, c0, c0, c0,
+        c0, c0, c2, c2, c2, c2, c2, c2, c2, c0,
+        c0, c1, c0, c2, c2, c2, c2, c2, c2, c0,
+        c0, c1, c1, c0, c2, c2, c2, c2, c2, c0,
+        c0, c1, c1, c1, c0, c2, c2, c2, c2, c0,
+        c0, c1, c1, c1, c1, c0, c2, c2, c2, c0,
+        c0, c1, c1, c1, c1, c1, c0, c2, c2, c0,
+        c0, c1, c1, c1, c1, c1, c1, c0, c2, c0,
+        c0, c1, c1, c1, c1, c1, c1, c1, c0, c0,
+        c0, c0, c0, c0, c0, c0, c0, c0, c0, c0,
+    })));
 
     fb.clear();
-    fb.fillShadedTriangle(.{ -5, 5 }, .{ 4, 5 }, .{ 0, 0 }, 1);
+    fb.fillShadedTriangle(.{ -5, 5 }, .{ 4, 5 }, .{ 0, 0 }, c1);
 
-    try std.testing.expect(std.mem.eql(u32, fb.rgba, &[_]u32{
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-        0, 1, 1, 1, 1, 1, 1, 1, 1, 0,
-        0, 0, 1, 1, 1, 1, 1, 1, 0, 0,
-        0, 0, 0, 1, 1, 1, 1, 1, 0, 0,
-        0, 0, 0, 0, 1, 1, 1, 0, 0, 0,
-        0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    }));
+    try std.testing.expect(std.mem.eql(u8, std.mem.sliceAsBytes(fb.rgba), std.mem.sliceAsBytes(&[_]Color{
+        c1, c1, c1, c1, c1, c1, c1, c1, c1, c1,
+        c0, c1, c1, c1, c1, c1, c1, c1, c1, c0,
+        c0, c0, c1, c1, c1, c1, c1, c1, c0, c0,
+        c0, c0, c0, c1, c1, c1, c1, c1, c0, c0,
+        c0, c0, c0, c0, c1, c1, c1, c0, c0, c0,
+        c0, c0, c0, c0, c0, c1, c0, c0, c0, c0,
+        c0, c0, c0, c0, c0, c0, c0, c0, c0, c0,
+        c0, c0, c0, c0, c0, c0, c0, c0, c0, c0,
+        c0, c0, c0, c0, c0, c0, c0, c0, c0, c0,
+        c0, c0, c0, c0, c0, c0, c0, c0, c0, c0,
+    })));
 }
 
 test "drawTriangle" {
     var fb = Framebuffer.init(std.testing.allocator, 10, 10) catch unreachable;
     defer fb.deinit(std.testing.allocator);
+    const c0 = Color.transparent();
+    const c1 = Color.new(0, 0, 0, 1);
+    const c2 = Color.new(0, 0, 0, 2);
 
     try std.testing.expect(fb.width == 10);
     try std.testing.expect(fb.height == 10);
     try std.testing.expect(fb.rgba.len == 100);
 
-    fb.drawTriangle(.{ -5, 5 }, .{ -5, -4 }, .{ 4, -4 }, 1);
-    fb.drawTriangle(.{ -4, 5 }, .{ 4, 5 }, .{ 4, -3 }, 2);
-    try std.testing.expect(std.mem.eql(u32, fb.rgba, &[_]u32{
-        1, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-        1, 1, 2, 0, 0, 0, 0, 0, 0, 2,
-        1, 0, 1, 2, 0, 0, 0, 0, 0, 2,
-        1, 0, 0, 1, 2, 0, 0, 0, 0, 2,
-        1, 0, 0, 0, 1, 2, 0, 0, 0, 2,
-        1, 0, 0, 0, 0, 1, 2, 0, 0, 2,
-        1, 0, 0, 0, 0, 0, 1, 2, 0, 2,
-        1, 0, 0, 0, 0, 0, 0, 1, 2, 2,
-        1, 0, 0, 0, 0, 0, 0, 0, 1, 2,
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    }));
+    fb.drawTriangle(.{ -5, 5 }, .{ -5, -4 }, .{ 4, -4 }, c1);
+    fb.drawTriangle(.{ -4, 5 }, .{ 4, 5 }, .{ 4, -3 }, c2);
+    try std.testing.expect(std.mem.eql(u8, std.mem.sliceAsBytes(fb.rgba), std.mem.sliceAsBytes(&[_]Color{
+        c1, c2, c2, c2, c2, c2, c2, c2, c2, c2,
+        c1, c1, c2, c0, c0, c0, c0, c0, c0, c2,
+        c1, c0, c1, c2, c0, c0, c0, c0, c0, c2,
+        c1, c0, c0, c1, c2, c0, c0, c0, c0, c2,
+        c1, c0, c0, c0, c1, c2, c0, c0, c0, c2,
+        c1, c0, c0, c0, c0, c1, c2, c0, c0, c2,
+        c1, c0, c0, c0, c0, c0, c1, c2, c0, c2,
+        c1, c0, c0, c0, c0, c0, c0, c1, c2, c2,
+        c1, c0, c0, c0, c0, c0, c0, c0, c1, c2,
+        c1, c1, c1, c1, c1, c1, c1, c1, c1, c1,
+    })));
 }
 
 test "drawLine" {
     var fb = Framebuffer.init(std.testing.allocator, 10, 10) catch unreachable;
     defer fb.deinit(std.testing.allocator);
-    fb.drawLine(.{ -5, 5 }, .{ 4, -4 }, 1);
-    fb.drawLine(.{ 4, 5 }, .{ -5, -4 }, 1);
-    fb.drawLine(.{ -5, 0 }, .{ 4, 0 }, 1);
-    fb.drawLine(.{ 0, 5 }, .{ 0, -4 }, 1);
-    try std.testing.expect(std.mem.eql(u32, fb.rgba, &[_]u32{
-        1, 0, 0, 0, 0, 1, 0, 0, 0, 1,
-        0, 1, 0, 0, 0, 1, 0, 0, 1, 0,
-        0, 0, 1, 0, 0, 1, 0, 1, 0, 0,
-        0, 0, 0, 1, 0, 1, 1, 0, 0, 0,
-        0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
-        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-        0, 0, 0, 1, 0, 1, 1, 0, 0, 0,
-        0, 0, 1, 0, 0, 1, 0, 1, 0, 0,
-        0, 1, 0, 0, 0, 1, 0, 0, 1, 0,
-        1, 0, 0, 0, 0, 1, 0, 0, 0, 1,
-    }));
+    const c0 = Color.transparent();
+    const c1 = Color.new(0, 0, 0, 1);
+    fb.drawLine(.{ -5, 5 }, .{ 4, -4 }, c1);
+    fb.drawLine(.{ 4, 5 }, .{ -5, -4 }, c1);
+    fb.drawLine(.{ -5, 0 }, .{ 4, 0 }, c1);
+    fb.drawLine(.{ 0, 5 }, .{ 0, -4 }, c1);
+    try std.testing.expect(std.mem.eql(u8, std.mem.sliceAsBytes(fb.rgba), std.mem.sliceAsBytes(&[_]Color{
+        c1, c0, c0, c0, c0, c1, c0, c0, c0, c1,
+        c0, c1, c0, c0, c0, c1, c0, c0, c1, c0,
+        c0, c0, c1, c0, c0, c1, c0, c1, c0, c0,
+        c0, c0, c0, c1, c0, c1, c1, c0, c0, c0,
+        c0, c0, c0, c0, c1, c1, c0, c0, c0, c0,
+        c1, c1, c1, c1, c1, c1, c1, c1, c1, c1,
+        c0, c0, c0, c1, c0, c1, c1, c0, c0, c0,
+        c0, c0, c1, c0, c0, c1, c0, c1, c0, c0,
+        c0, c1, c0, c0, c0, c1, c0, c0, c1, c0,
+        c1, c0, c0, c0, c0, c1, c0, c0, c0, c1,
+    })));
 }
 
 // Alternative drawLine implementation using interpolation
