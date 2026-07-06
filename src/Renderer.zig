@@ -5,9 +5,9 @@ const zalgebra = @import("zalgebra");
 const Vec3 = zalgebra.Vec3;
 const Mat4 = zalgebra.Mat4;
 
+const Canvas = @import("Canvas.zig");
+const Pixel = Canvas.Pixel;
 const Color = @import("Color.zig");
-const Framebuffer = @import("Framebuffer.zig");
-const Pixel = Framebuffer.Pixel;
 
 const Renderer = @This();
 
@@ -28,7 +28,7 @@ pub fn init(allocator: std.mem.Allocator) Renderer {
 pub fn renderGltf(
     self: *Renderer,
     gltf: *Gltf,
-    fb: *Framebuffer,
+    cv: *Canvas,
     config: Config,
 ) !void {
     if (gltf.data.scene == null or gltf.data.scenes.len == 0) {
@@ -46,7 +46,7 @@ pub fn renderGltf(
         Vec3.fromSlice(&config.scale),
     );
     for (scene.nodes.?) |node_index| {
-        try self.renderNode(node_index, gltf, fb, world);
+        try self.renderNode(node_index, gltf, cv, world);
     }
 }
 
@@ -54,17 +54,17 @@ fn renderNode(
     self: *Renderer,
     node_index: usize,
     gltf: *Gltf,
-    fb: *Framebuffer,
+    cv: *Canvas,
     world: Mat4,
 ) !void {
     const node = gltf.data.nodes[node_index];
 
     for (node.children) |childNode| {
-        try self.renderNode(childNode, gltf, fb, world);
+        try self.renderNode(childNode, gltf, cv, world);
     }
 
     if (node.mesh != null) {
-        try self.renderMesh(node_index, gltf, fb, world);
+        try self.renderMesh(node_index, gltf, cv, world);
     }
 }
 
@@ -72,12 +72,11 @@ fn renderMesh(
     self: *Renderer,
     node_index: usize,
     gltf: *Gltf,
-    fb: *Framebuffer,
+    cv: *Canvas,
     world: Mat4,
 ) !void {
     const node = gltf.data.nodes[node_index];
-    const om: [16]f32 = @bitCast(Gltf.getGlobalTransform(&gltf.data, node));
-    const object_model = Mat4.fromSlice(&om);
+    const object_model = Mat4.fromSlice(&@bitCast(Gltf.getGlobalTransform(&gltf.data, node)));
     const mesh = gltf.data.meshes[node.mesh.?];
 
     const global_model = Mat4.mul(world, object_model);
@@ -121,9 +120,9 @@ fn renderMesh(
         if (primitive.indices) |indices_accessor_index| {
             const indices_accessor = gltf.data.accessors[indices_accessor_index];
             switch (indices_accessor.component_type) {
-                .unsigned_byte => try self.drawIndices(u8, indices_accessor, gltf, positions.items, fb, base_color),
-                .unsigned_short => try self.drawIndices(u16, indices_accessor, gltf, positions.items, fb, base_color),
-                .unsigned_integer => try self.drawIndices(u32, indices_accessor, gltf, positions.items, fb, base_color),
+                .unsigned_byte => try self.drawIndices(u8, indices_accessor, gltf, positions.items, cv, base_color),
+                .unsigned_short => try self.drawIndices(u16, indices_accessor, gltf, positions.items, cv, base_color),
+                .unsigned_integer => try self.drawIndices(u32, indices_accessor, gltf, positions.items, cv, base_color),
                 else => {
                     std.debug.print("Unsupported index component type. {}\n", .{indices_accessor.component_type});
                 },
@@ -135,7 +134,7 @@ fn renderMesh(
                     positions.items[i],
                     positions.items[i + 1],
                     positions.items[i + 2],
-                    fb,
+                    cv,
                     base_color,
                 );
             }
@@ -149,7 +148,7 @@ fn drawIndices(
     accessor: Gltf.Accessor,
     gltf: *Gltf,
     positions: []const Vec3,
-    fb: *Framebuffer,
+    cv: *Canvas,
     color: Color,
 ) !void {
     const indices = try gltf.getDataFromBufferView(
@@ -166,7 +165,7 @@ fn drawIndices(
             positions[indices[i]],
             positions[indices[i + 1]],
             positions[indices[i + 2]],
-            fb,
+            cv,
             color,
         );
     }
@@ -174,16 +173,17 @@ fn drawIndices(
 
 const CLIP_Z: f32 = 0.1;
 
-fn drawTriangle(_: *Renderer, va: Vec3, vb: Vec3, vc: Vec3, fb: *Framebuffer, color: Color) void {
+fn drawTriangle(_: *Renderer, va: Vec3, vb: Vec3, vc: Vec3, cv: *Canvas, color: Color) void {
     if (va.z() < CLIP_Z or vb.z() < CLIP_Z or vc.z() < CLIP_Z) return;
 
-    const a = Pixel.fromVec3(va, fb.width, fb.height);
-    const b = Pixel.fromVec3(vb, fb.width, fb.height);
-    const c = Pixel.fromVec3(vc, fb.width, fb.height);
+    const a = Pixel.fromVec3(va, cv.width, cv.height);
+    const b = Pixel.fromVec3(vb, cv.width, cv.height);
+    const c = Pixel.fromVec3(vc, cv.width, cv.height);
 
-    fb.fillShadedTriangle(a, b, c, color);
+    if (cv.inBounds(a) or cv.inBounds(b) or cv.inBounds(c))
+        cv.fillShadedTriangle(a, b, c, color);
 
-    // if (a_ok and b_ok) fb.drawLine(a.?, b.?, color);
-    // if (b_ok and c_ok) fb.drawLine(b.?, c.?, color);
-    // if (c_ok and a_ok) fb.drawLine(c.?, a.?, color);
+    // if (a_ok and b_ok) cv.drawLine(a.?, b.?, color);
+    // if (b_ok and c_ok) cv.drawLine(b.?, c.?, color);
+    // if (c_ok and a_ok) cv.drawLine(c.?, a.?, color);
 }

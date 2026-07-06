@@ -4,9 +4,9 @@ const exit = std.process.exit;
 
 const Gltf = @import("zgltf");
 
+const Canvas = @import("Canvas.zig");
 const Color = @import("Color.zig");
 const flag = @import("flag.zig");
-const Framebuffer = @import("Framebuffer.zig");
 const Renderer = @import("Renderer.zig");
 
 pub fn main(init: std.process.Init) !void {
@@ -70,10 +70,10 @@ pub fn main(init: std.process.Init) !void {
     gltf.glb_binary = bin;
 
     var renderer = Renderer.init(arena);
-    var fb = try Framebuffer.init(arena, flags.pixels, flags.pixels);
-    defer fb.deinit(arena);
+    var cv = try Canvas.init(arena, flags.pixels, flags.pixels);
+    defer cv.deinit(arena);
 
-    const enc_buf = try arena.alloc(u8, std.base64.standard.Encoder.calcSize(fb.rgba.len * @sizeOf(Color)));
+    const enc_buf = try arena.alloc(u8, std.base64.standard.Encoder.calcSize(cv.rgba.len * @sizeOf(Color)));
     defer arena.free(enc_buf);
 
     var image_id: u8 = 1;
@@ -90,7 +90,7 @@ pub fn main(init: std.process.Init) !void {
 
         try renderer.renderGltf(
             &gltf,
-            &fb,
+            &cv,
             .{
                 .scale = flags.scale,
                 .translation = flags.translation,
@@ -102,14 +102,14 @@ pub fn main(init: std.process.Init) !void {
             },
         );
 
-        const payload = std.base64.standard.Encoder.encode(enc_buf, fb.asBytes());
+        const payload = std.base64.standard.Encoder.encode(enc_buf, cv.asBytes());
 
         print(
             "\x1b_Gf=32,s={d},v={d},i={d},q=1;{s}\x1b\\",
-            .{ fb.width, fb.height, image_id, payload },
+            .{ cv.width, cv.height, image_id, payload },
         );
 
-        fb.clear();
+        cv.clear();
     }
 
     print("\r                          \r", .{});
@@ -137,8 +137,8 @@ pub fn main(init: std.process.Init) !void {
 }
 
 test "test" {
+    _ = @import("Canvas.zig");
     _ = @import("Color.zig");
-    _ = @import("Framebuffer.zig");
     _ = @import("interpolate.zig");
     _ = @import("Renderer.zig");
     _ = @import("flag.zig");

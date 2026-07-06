@@ -1,10 +1,15 @@
 const std = @import("std");
+
 const Vec3 = @import("zalgebra").Vec3;
 
 const Color = @import("Color.zig");
 const interpolate = @import("interpolate.zig").interpolate;
 
-const Framebuffer = @This();
+const Canvas = @This();
+
+width: usize,
+height: usize,
+rgba: []Color,
 
 // Currently not used, but needed for depth buffering
 pub const Coordinate = struct {
@@ -54,11 +59,7 @@ pub const Pixel = struct {
     }
 };
 
-width: usize,
-height: usize,
-rgba: []Color,
-
-pub fn init(allocator: std.mem.Allocator, width: usize, height: usize) !Framebuffer {
+pub fn init(allocator: std.mem.Allocator, width: usize, height: usize) !Canvas {
     if (width < 2 or height < 2) return error.InvalidDimensions;
 
     const rgba = try allocator.alloc(Color, width * height);
@@ -71,7 +72,7 @@ pub fn init(allocator: std.mem.Allocator, width: usize, height: usize) !Framebuf
     };
 }
 
-pub fn deinit(self: *Framebuffer, allocator: std.mem.Allocator) void {
+pub fn deinit(self: *Canvas, allocator: std.mem.Allocator) void {
     std.debug.assert(self.rgba.len > 0);
     std.debug.assert(self.rgba.len == self.width * self.height);
 
@@ -79,15 +80,25 @@ pub fn deinit(self: *Framebuffer, allocator: std.mem.Allocator) void {
 }
 
 /// Clears the framebuffer by setting all pixels to transparent black (0, 0, 0, 0).
-pub fn clear(self: *Framebuffer) void {
+pub fn clear(self: *Canvas) void {
     @memset(self.rgba, Color.transparent());
 }
 
-pub fn asBytes(self: Framebuffer) []u8 {
+pub fn inBounds(self: Canvas, p: Pixel) bool {
+    const max_width = @as(i32, @intCast(self.width >> 1));
+    const max_height = @as(i32, @intCast(self.height >> 1));
+
+    return (p.x < max_width and
+        p.x >= -max_width and
+        p.y <= max_height and
+        p.y > -max_height);
+}
+
+pub fn asBytes(self: Canvas) []u8 {
     return std.mem.sliceAsBytes(self.rgba);
 }
 
-pub fn print(self: Framebuffer) void {
+pub fn print(self: Canvas) void {
     for (0..self.height) |i| {
         for (i * self.width..(i + 1) * self.width) |j| {
             const col = std.mem.readInt(u32, &[_]u8{
@@ -102,7 +113,7 @@ pub fn print(self: Framebuffer) void {
     }
 }
 
-pub fn fillShadedTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, color: Color) void {
+pub fn fillShadedTriangle(self: *Canvas, a: Pixel, b: Pixel, c: Pixel, color: Color) void {
     var ordered = [3]Pixel{ a, b, c };
     std.sort.block(Pixel, &ordered, {}, struct {
         pub fn lessThan(_: void, pa: Pixel, pb: Pixel) bool {
@@ -160,7 +171,7 @@ pub fn fillShadedTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, colo
     }
 }
 
-pub fn drawTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, color: Color) void {
+pub fn drawTriangle(self: *Canvas, a: Pixel, b: Pixel, c: Pixel, color: Color) void {
     self.drawLine(a, b, color);
     self.drawLine(b, c, color);
     self.drawLine(c, a, color);
@@ -168,7 +179,7 @@ pub fn drawTriangle(self: *Framebuffer, a: Pixel, b: Pixel, c: Pixel, color: Col
 
 // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
 /// Draws a line from pixel a to pixel b with color c.
-pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
+pub fn drawLine(self: *Canvas, a: Pixel, b: Pixel, c: Color) void {
     var x0 = a.x;
     var y0 = a.y;
 
@@ -203,12 +214,11 @@ pub fn drawLine(self: *Framebuffer, a: Pixel, b: Pixel, c: Color) void {
 }
 
 /// Writes Color c to the framebuffer at Pixel a.
-pub fn putPixel(self: *Framebuffer, p: Pixel, c: Color) void {
+pub fn putPixel(self: *Canvas, p: Pixel, c: Color) void {
     const max_width = @as(i32, @intCast(self.width >> 1));
     const max_height = @as(i32, @intCast(self.height >> 1));
 
-    if (p.y > max_height or p.y <= -max_height or
-        p.x >= max_width or p.x < -max_width) return;
+    if (!self.inBounds(p)) return;
 
     const idx = @as(usize, @intCast(max_height - p.y)) * self.width +
         @as(usize, @intCast(p.x + max_width));
@@ -217,21 +227,21 @@ pub fn putPixel(self: *Framebuffer, p: Pixel, c: Color) void {
 }
 
 test "init" {
-    try std.testing.expectError(error.InvalidDimensions, Framebuffer.init(std.testing.allocator, 1, 1));
+    try std.testing.expectError(error.InvalidDimensions, Canvas.init(std.testing.allocator, 1, 1));
 }
 
 test "fillShadedTriangle" {
-    var fb = Framebuffer.init(std.testing.allocator, 10, 10) catch unreachable;
-    defer fb.deinit(std.testing.allocator);
+    var cv = Canvas.init(std.testing.allocator, 10, 10) catch unreachable;
+    defer cv.deinit(std.testing.allocator);
 
     const c0 = Color.transparent();
     const c1 = Color.new(0, 0, 0, 1);
     const c2 = Color.new(0, 0, 0, 2);
 
-    fb.fillShadedTriangle(.{ .x = -4, .y = 3 }, .{ .x = -4, .y = -3 }, .{ .x = 2, .y = -3 }, c1);
-    fb.fillShadedTriangle(.{ .x = -3, .y = 4 }, .{ .x = 3, .y = 4 }, .{ .x = 3, .y = -2 }, c2);
+    cv.fillShadedTriangle(.{ .x = -4, .y = 3 }, .{ .x = -4, .y = -3 }, .{ .x = 2, .y = -3 }, c1);
+    cv.fillShadedTriangle(.{ .x = -3, .y = 4 }, .{ .x = 3, .y = 4 }, .{ .x = 3, .y = -2 }, c2);
 
-    try std.testing.expect(std.mem.eql(u8, fb.asBytes(), std.mem.sliceAsBytes(&[_]Color{
+    try std.testing.expect(std.mem.eql(u8, cv.asBytes(), std.mem.sliceAsBytes(&[_]Color{
         c0, c0, c0, c0, c0, c0, c0, c0, c0, c0,
         c0, c0, c2, c2, c2, c2, c2, c2, c2, c0,
         c0, c1, c0, c2, c2, c2, c2, c2, c2, c0,
@@ -244,11 +254,11 @@ test "fillShadedTriangle" {
         c0, c0, c0, c0, c0, c0, c0, c0, c0, c0,
     })));
 
-    fb.clear();
-    fb.fillShadedTriangle(.{ .x = -5, .y = 5 }, .{ .x = 4, .y = 5 }, .{ .x = 0, .y = 0 }, c1);
-    fb.fillShadedTriangle(.{ .x = -5, .y = -4 }, .{ .x = 0, .y = -4 }, .{ .x = -3, .y = -2 }, c1);
+    cv.clear();
+    cv.fillShadedTriangle(.{ .x = -5, .y = 5 }, .{ .x = 4, .y = 5 }, .{ .x = 0, .y = 0 }, c1);
+    cv.fillShadedTriangle(.{ .x = -5, .y = -4 }, .{ .x = 0, .y = -4 }, .{ .x = -3, .y = -2 }, c1);
 
-    try std.testing.expect(std.mem.eql(u8, fb.asBytes(), std.mem.sliceAsBytes(&[_]Color{
+    try std.testing.expect(std.mem.eql(u8, cv.asBytes(), std.mem.sliceAsBytes(&[_]Color{
         c1, c1, c1, c1, c1, c1, c1, c1, c1, c1,
         c0, c1, c1, c1, c1, c1, c1, c1, c1, c0,
         c0, c0, c1, c1, c1, c1, c1, c1, c0, c0,
@@ -265,20 +275,20 @@ test "fillShadedTriangle" {
 test "drawTriangle" {
     const expect = std.testing.expect;
 
-    var fb = Framebuffer.init(std.testing.allocator, 10, 10) catch unreachable;
-    defer fb.deinit(std.testing.allocator);
+    var cv = Canvas.init(std.testing.allocator, 10, 10) catch unreachable;
+    defer cv.deinit(std.testing.allocator);
 
     const c0 = Color.transparent();
     const c1 = Color.new(0, 0, 0, 1);
     const c2 = Color.new(0, 0, 0, 2);
 
-    try expect(fb.width == 10);
-    try expect(fb.height == 10);
-    try expect(fb.rgba.len == 100);
+    try expect(cv.width == 10);
+    try expect(cv.height == 10);
+    try expect(cv.rgba.len == 100);
 
-    fb.drawTriangle(.{ .x = -5, .y = 5 }, .{ .x = -5, .y = -4 }, .{ .x = 4, .y = -4 }, c1);
-    fb.drawTriangle(.{ .x = -4, .y = 5 }, .{ .x = 4, .y = 5 }, .{ .x = 4, .y = -3 }, c2);
-    try expect(std.mem.eql(u8, fb.asBytes(), std.mem.sliceAsBytes(&[_]Color{
+    cv.drawTriangle(.{ .x = -5, .y = 5 }, .{ .x = -5, .y = -4 }, .{ .x = 4, .y = -4 }, c1);
+    cv.drawTriangle(.{ .x = -4, .y = 5 }, .{ .x = 4, .y = 5 }, .{ .x = 4, .y = -3 }, c2);
+    try expect(std.mem.eql(u8, cv.asBytes(), std.mem.sliceAsBytes(&[_]Color{
         c1, c2, c2, c2, c2, c2, c2, c2, c2, c2,
         c1, c1, c2, c0, c0, c0, c0, c0, c0, c2,
         c1, c0, c1, c2, c0, c0, c0, c0, c0, c2,
@@ -293,16 +303,16 @@ test "drawTriangle" {
 }
 
 test "drawLine" {
-    var fb = Framebuffer.init(std.testing.allocator, 10, 10) catch unreachable;
-    defer fb.deinit(std.testing.allocator);
+    var cv = Canvas.init(std.testing.allocator, 10, 10) catch unreachable;
+    defer cv.deinit(std.testing.allocator);
 
     const c0 = Color.transparent();
     const c1 = Color.new(0, 0, 0, 1);
-    fb.drawLine(.{ .x = -5, .y = 5 }, .{ .x = 4, .y = -4 }, c1);
-    fb.drawLine(.{ .x = 4, .y = 5 }, .{ .x = -5, .y = -4 }, c1);
-    fb.drawLine(.{ .x = -5, .y = 0 }, .{ .x = 4, .y = 0 }, c1);
-    fb.drawLine(.{ .x = 0, .y = 5 }, .{ .x = 0, .y = -4 }, c1);
-    try std.testing.expect(std.mem.eql(u8, fb.asBytes(), std.mem.sliceAsBytes(&[_]Color{
+    cv.drawLine(.{ .x = -5, .y = 5 }, .{ .x = 4, .y = -4 }, c1);
+    cv.drawLine(.{ .x = 4, .y = 5 }, .{ .x = -5, .y = -4 }, c1);
+    cv.drawLine(.{ .x = -5, .y = 0 }, .{ .x = 4, .y = 0 }, c1);
+    cv.drawLine(.{ .x = 0, .y = 5 }, .{ .x = 0, .y = -4 }, c1);
+    try std.testing.expect(std.mem.eql(u8, cv.asBytes(), std.mem.sliceAsBytes(&[_]Color{
         c1, c0, c0, c0, c0, c1, c0, c0, c0, c1,
         c0, c1, c0, c0, c0, c1, c0, c0, c1, c0,
         c0, c0, c1, c0, c0, c1, c0, c1, c0, c0,
@@ -317,17 +327,17 @@ test "drawLine" {
 }
 
 test "putPixel" {
-    var fb = Framebuffer.init(std.testing.allocator, 6, 4) catch unreachable;
-    defer fb.deinit(std.testing.allocator);
+    var cv = Canvas.init(std.testing.allocator, 6, 4) catch unreachable;
+    defer cv.deinit(std.testing.allocator);
     const c0 = Color.transparent();
     const c1 = Color.new(0, 0, 0, 1);
 
-    fb.putPixel(.{ .x = -3, .y = 2 }, c1);
-    fb.putPixel(.{ .x = 2, .y = 2 }, c1);
-    fb.putPixel(.{ .x = -3, .y = -1 }, c1);
-    fb.putPixel(.{ .x = 2, .y = -1 }, c1);
-    fb.putPixel(.{ .x = 0, .y = 0 }, c1);
-    try std.testing.expect(std.mem.eql(u8, fb.asBytes(), std.mem.sliceAsBytes(&[_]Color{
+    cv.putPixel(.{ .x = -3, .y = 2 }, c1);
+    cv.putPixel(.{ .x = 2, .y = 2 }, c1);
+    cv.putPixel(.{ .x = -3, .y = -1 }, c1);
+    cv.putPixel(.{ .x = 2, .y = -1 }, c1);
+    cv.putPixel(.{ .x = 0, .y = 0 }, c1);
+    try std.testing.expect(std.mem.eql(u8, cv.asBytes(), std.mem.sliceAsBytes(&[_]Color{
         c1, c0, c0, c0, c0, c1,
         c0, c0, c0, c0, c0, c0,
         c0, c0, c0, c1, c0, c0,
@@ -336,14 +346,14 @@ test "putPixel" {
 }
 
 test "asBytes" {
-    var fb = Framebuffer.init(std.testing.allocator, 2, 2) catch unreachable;
-    defer fb.deinit(std.testing.allocator);
+    var cv = Canvas.init(std.testing.allocator, 2, 2) catch unreachable;
+    defer cv.deinit(std.testing.allocator);
 
-    fb.putPixel(.{ .x = -1, .y = 1 }, Color.new(0xFF, 0x00, 0x00, 0xFF));
-    fb.putPixel(.{ .x = 0, .y = 1 }, Color.new(0x00, 0xFF, 0x00, 0xFF));
-    fb.putPixel(.{ .x = -1, .y = 0 }, Color.new(0x00, 0x00, 0xFF, 0xFF));
-    fb.putPixel(.{ .x = 0, .y = 0 }, Color.new(0xFF, 0xFF, 0x00, 0x80));
-    try std.testing.expect(std.mem.eql(u8, fb.asBytes(), &[_]u8{
+    cv.putPixel(.{ .x = -1, .y = 1 }, Color.new(0xFF, 0x00, 0x00, 0xFF));
+    cv.putPixel(.{ .x = 0, .y = 1 }, Color.new(0x00, 0xFF, 0x00, 0xFF));
+    cv.putPixel(.{ .x = -1, .y = 0 }, Color.new(0x00, 0x00, 0xFF, 0xFF));
+    cv.putPixel(.{ .x = 0, .y = 0 }, Color.new(0xFF, 0xFF, 0x00, 0x80));
+    try std.testing.expect(std.mem.eql(u8, cv.asBytes(), &[_]u8{
         0xFF, 0x00, 0x00, 0xFF,
         0x00, 0xFF, 0x00, 0xFF,
         0x00, 0x00, 0xFF, 0xFF,
