@@ -70,6 +70,7 @@ pub fn main(init: std.process.Init) !void {
     gltf.glb_binary = bin;
 
     var renderer = Renderer.init(arena);
+
     var cv = try Canvas.init(arena, flags.pixels, flags.pixels);
     defer cv.deinit(arena);
 
@@ -139,7 +140,7 @@ pub fn main(init: std.process.Init) !void {
 test "test" {
     _ = @import("Canvas.zig");
     _ = @import("Color.zig");
-    _ = @import("interpolate.zig");
     _ = @import("Renderer.zig");
     _ = @import("flag.zig");
+    _ = @import("helpers.zig");
 }

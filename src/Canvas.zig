@@ -3,7 +3,7 @@ const std = @import("std");
 const Vec3 = @import("zalgebra").Vec3;
 
 const Color = @import("Color.zig");
-const interpolate = @import("interpolate.zig").interpolate;
+const lerp = @import("helpers.zig").lerp;
 
 const Canvas = @This();
 
@@ -63,7 +63,7 @@ pub fn init(allocator: std.mem.Allocator, width: usize, height: usize) !Canvas {
     if (width < 2 or height < 2) return error.InvalidDimensions;
 
     const rgba = try allocator.alloc(Color, width * height);
-    @memset(rgba, Color.transparent());
+    @memset(rgba, Color.transparent);
 
     return .{
         .width = width,
@@ -81,7 +81,7 @@ pub fn deinit(self: *Canvas, allocator: std.mem.Allocator) void {
 
 /// Clears the framebuffer by setting all pixels to transparent black (0, 0, 0, 0).
 pub fn clear(self: *Canvas) void {
-    @memset(self.rgba, Color.transparent());
+    @memset(self.rgba, Color.transparent);
 }
 
 pub fn inBounds(self: Canvas, p: Pixel) bool {
@@ -107,67 +107,9 @@ pub fn print(self: Canvas) void {
                 self.rgba[j].b,
                 self.rgba[j].a,
             }, .big);
-            std.debug.print("{x:0>4}, ", .{col});
+            std.debug.print("{x:0>8}, ", .{col});
         }
         std.debug.print("\n", .{});
-    }
-}
-
-pub fn fillShadedTriangle(self: *Canvas, a: Pixel, b: Pixel, c: Pixel, color: Color) void {
-    var ordered = [3]Pixel{ a, b, c };
-    std.sort.block(Pixel, &ordered, {}, struct {
-        pub fn lessThan(_: void, pa: Pixel, pb: Pixel) bool {
-            return pa.y < pb.y;
-        }
-    }.lessThan);
-
-    const p0 = ordered[0];
-    const p1 = ordered[1];
-    const p2 = ordered[2];
-
-    var it_0 = interpolate(i32, p0.y, p0.x, p1.y, p1.x);
-    var it_1 = interpolate(i32, p1.y, p1.x, p2.y, p2.x);
-    var it_2 = interpolate(i32, p0.y, p0.x, p2.y, p2.x);
-
-    // placeholder values
-    var h_it_0 = interpolate(f32, p0.y, 1, p1.y, 1);
-    var h_it_1 = interpolate(f32, p1.y, 1, p2.y, 1);
-    var h_it_2 = interpolate(f32, p0.y, 1, p2.y, 1);
-
-    var i: usize = 0;
-    while (true) : (i += 1) {
-        const x012 = blk: {
-            if (it_0.peekAt(1) == null)
-                break :blk it_1.next() orelse break;
-            break :blk it_0.next() orelse break;
-        };
-        const x02 = it_2.next() orelse break;
-
-        const h012 = blk: {
-            if (h_it_0.peekAt(1) == null)
-                break :blk h_it_1.next() orelse break;
-            break :blk h_it_0.next() orelse break;
-        };
-        const h02 = h_it_2.next() orelse break;
-
-        const y = p0.y + @as(i32, @intCast(i));
-
-        var left = @min(x02, x012);
-        const right = @max(x02, x012);
-        const h_left = if (x02 < x012) h02 else h012;
-        const h_right = if (x02 < x012) h012 else h02;
-
-        var h_segment = interpolate(
-            f32,
-            left,
-            h_left,
-            right,
-            h_right,
-        );
-
-        while (left <= right) : (left += 1) {
-            self.putPixel(.{ .x = left, .y = y }, color.mul(h_segment.next() orelse 1));
-        }
     }
 }
 
@@ -230,55 +172,13 @@ test "init" {
     try std.testing.expectError(error.InvalidDimensions, Canvas.init(std.testing.allocator, 1, 1));
 }
 
-test "fillShadedTriangle" {
-    var cv = Canvas.init(std.testing.allocator, 10, 10) catch unreachable;
-    defer cv.deinit(std.testing.allocator);
-
-    const c0 = Color.transparent();
-    const c1 = Color.new(0, 0, 0, 1);
-    const c2 = Color.new(0, 0, 0, 2);
-
-    cv.fillShadedTriangle(.{ .x = -4, .y = 3 }, .{ .x = -4, .y = -3 }, .{ .x = 2, .y = -3 }, c1);
-    cv.fillShadedTriangle(.{ .x = -3, .y = 4 }, .{ .x = 3, .y = 4 }, .{ .x = 3, .y = -2 }, c2);
-
-    try std.testing.expect(std.mem.eql(u8, cv.asBytes(), std.mem.sliceAsBytes(&[_]Color{
-        c0, c0, c0, c0, c0, c0, c0, c0, c0, c0,
-        c0, c0, c2, c2, c2, c2, c2, c2, c2, c0,
-        c0, c1, c0, c2, c2, c2, c2, c2, c2, c0,
-        c0, c1, c1, c0, c2, c2, c2, c2, c2, c0,
-        c0, c1, c1, c1, c0, c2, c2, c2, c2, c0,
-        c0, c1, c1, c1, c1, c0, c2, c2, c2, c0,
-        c0, c1, c1, c1, c1, c1, c0, c2, c2, c0,
-        c0, c1, c1, c1, c1, c1, c1, c0, c2, c0,
-        c0, c1, c1, c1, c1, c1, c1, c1, c0, c0,
-        c0, c0, c0, c0, c0, c0, c0, c0, c0, c0,
-    })));
-
-    cv.clear();
-    cv.fillShadedTriangle(.{ .x = -5, .y = 5 }, .{ .x = 4, .y = 5 }, .{ .x = 0, .y = 0 }, c1);
-    cv.fillShadedTriangle(.{ .x = -5, .y = -4 }, .{ .x = 0, .y = -4 }, .{ .x = -3, .y = -2 }, c1);
-
-    try std.testing.expect(std.mem.eql(u8, cv.asBytes(), std.mem.sliceAsBytes(&[_]Color{
-        c1, c1, c1, c1, c1, c1, c1, c1, c1, c1,
-        c0, c1, c1, c1, c1, c1, c1, c1, c1, c0,
-        c0, c0, c1, c1, c1, c1, c1, c1, c0, c0,
-        c0, c0, c0, c1, c1, c1, c1, c1, c0, c0,
-        c0, c0, c0, c0, c1, c1, c1, c0, c0, c0,
-        c0, c0, c0, c0, c0, c1, c0, c0, c0, c0,
-        c0, c0, c0, c0, c0, c0, c0, c0, c0, c0,
-        c0, c0, c1, c0, c0, c0, c0, c0, c0, c0,
-        c0, c1, c1, c1, c0, c0, c0, c0, c0, c0,
-        c1, c1, c1, c1, c1, c1, c0, c0, c0, c0,
-    })));
-}
-
 test "drawTriangle" {
     const expect = std.testing.expect;
 
     var cv = Canvas.init(std.testing.allocator, 10, 10) catch unreachable;
     defer cv.deinit(std.testing.allocator);
 
-    const c0 = Color.transparent();
+    const c0 = Color.transparent;
     const c1 = Color.new(0, 0, 0, 1);
     const c2 = Color.new(0, 0, 0, 2);
 
@@ -306,7 +206,7 @@ test "drawLine" {
     var cv = Canvas.init(std.testing.allocator, 10, 10) catch unreachable;
     defer cv.deinit(std.testing.allocator);
 
-    const c0 = Color.transparent();
+    const c0 = Color.transparent;
     const c1 = Color.new(0, 0, 0, 1);
     cv.drawLine(.{ .x = -5, .y = 5 }, .{ .x = 4, .y = -4 }, c1);
     cv.drawLine(.{ .x = 4, .y = 5 }, .{ .x = -5, .y = -4 }, c1);
@@ -329,7 +229,7 @@ test "drawLine" {
 test "putPixel" {
     var cv = Canvas.init(std.testing.allocator, 6, 4) catch unreachable;
     defer cv.deinit(std.testing.allocator);
-    const c0 = Color.transparent();
+    const c0 = Color.transparent;
     const c1 = Color.new(0, 0, 0, 1);
 
     cv.putPixel(.{ .x = -3, .y = 2 }, c1);

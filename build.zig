@@ -11,6 +11,8 @@ pub fn build(b: *std.Build) void {
 
     const zalgebra_mod = b.dependency("zalgebra", .{});
 
+    const zigimg_mod = b.dependency("zigimg", .{});
+
     const exe = b.addExecutable(.{
         .name = "gltfv",
         .root_module = b.createModule(.{
@@ -20,6 +22,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{
                 .{ .name = "zgltf", .module = zgltf_mod },
                 .{ .name = "zalgebra", .module = zalgebra_mod.module("zalgebra") },
+                .{ .name = "zigimg", .module = zigimg_mod.module("zigimg") },
             },
         }),
     });

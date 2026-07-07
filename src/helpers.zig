@@ -1,4 +1,76 @@
-pub fn interpolate(comptime T: type, i_0: i32, d0: T, i_1: i32, d1: T) LerpIterator(T) {
+const std = @import("std");
+
+const Gltf = @import("zgltf");
+const zalgebra = @import("zalgebra");
+const Vec2 = zalgebra.Vec2;
+const Vec3 = zalgebra.Vec3;
+const Mat4 = zalgebra.Mat4;
+const zigimg = @import("zigimg");
+
+const Image = @import("Renderer.zig").Texture.Image;
+
+pub fn getAttributes(allocator: std.mem.Allocator, gltf: *Gltf, world: Mat4, attributes: []Gltf.Attribute) !struct {
+    positions: []Vec3,
+    texcoords: []Vec2,
+} {
+    var positions = std.ArrayList(Vec3).empty;
+    var texcoords = std.ArrayList(Vec2).empty;
+
+    for (attributes) |attr| {
+        switch (attr) {
+            .position => |idx| {
+                const accessor = gltf.data.accessors[idx];
+                var raw_positions_it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
+                while (raw_positions_it.next()) |pos| {
+                    try positions.append(allocator, Mat4.mulByVec3(
+                        world,
+                        Vec3.new(pos[0], pos[1], pos[2]),
+                    ));
+                }
+            },
+            .texcoord => |idx| {
+                const accessor = gltf.data.accessors[idx];
+                var texc_it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
+                while (texc_it.next()) |texc| {
+                    try texcoords.append(allocator, Vec2.new(texc[0], texc[1]));
+                }
+            },
+            else => {},
+        }
+    }
+    return .{
+        .positions = try positions.toOwnedSlice(allocator),
+        .texcoords = try texcoords.toOwnedSlice(allocator),
+    };
+}
+
+pub fn getTextureImage(allocator: std.mem.Allocator, gltf: *Gltf, material: Gltf.Material) !?Image {
+    var image = blk: {
+        const texture_info = material.metallic_roughness.base_color_texture orelse break :blk null;
+        const texture = gltf.data.textures[texture_info.index];
+        const img = if (texture.source != null) gltf.data.images[texture.source.?] else break :blk null;
+        if (img.data) |data| break :blk try zigimg.Image.fromMemory(allocator, data);
+        break :blk null;
+    };
+    defer if (image != null) image.?.deinit(allocator);
+
+    var pixels = std.ArrayList(zigimg.color.Colorf32).empty;
+
+    if (image != null) {
+        var imit = image.?.iterator();
+        while (imit.next()) |col| {
+            try pixels.append(allocator, col);
+        }
+    }
+
+    return if (image == null) null else Image{
+        .width = image.?.width,
+        .height = image.?.height,
+        .pixels = try pixels.toOwnedSlice(allocator),
+    };
+}
+
+pub fn lerp(comptime T: type, i_0: i32, d0: T, i_1: i32, d1: T) LerpIterator(T) {
     const is_float = comptime isFloat(T);
 
     const delta_i = @as(if (is_float) T else f32, @floatFromInt(i_1 - i_0));
@@ -82,7 +154,7 @@ fn isFloat(comptime T: type) bool {
 
 test "LerpIterator" {
     const expectEql = @import("std").testing.expectEqual;
-    var it = interpolate(i32, 0, 0, 10, 100);
+    var it = lerp(i32, 0, 0, 10, 100);
     try expectEql(0, it.next());
     try expectEql(10, it.next());
     try expectEql(20, it.next());
@@ -108,7 +180,7 @@ test "LerpIterator" {
     try expectEql(50, it.next());
     try expectEql(null, it.next());
 
-    var it2 = interpolate(f32, 0, 0, 5, 1);
+    var it2 = lerp(f32, 0, 0, 5, 1);
     try expectEql(0, it2.next());
     try expectEql(0.2, it2.next());
     try expectEql(0.4, it2.next());
