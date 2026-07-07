@@ -100,6 +100,7 @@ pub fn main(init: std.process.Init) !void {
                     flags.rotation[1] + if (flags.rotY) rotation else 0,
                     flags.rotation[2] + if (flags.rotZ) rotation else 0,
                 },
+                .wireframe = flags.wireframe,
             },
         );
 

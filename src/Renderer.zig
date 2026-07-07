@@ -20,12 +20,14 @@ allocator: std.mem.Allocator,
 const CLIP_Z: f32 = 1;
 
 const Config = struct {
+    wireframe: bool = false,
     scale: [3]f32 = .{ 1, 1, 1 },
     translation: [3]f32 = .{ 0, 0, 0 },
     rotation: [3]f32 = .{ 0, 0, 0 },
 };
 
 pub const Context = struct {
+    wireframe: bool,
     canvas: *Canvas,
     gltf: *Gltf,
     bin: []align(4) const u8,
@@ -84,6 +86,7 @@ pub fn renderGltf(
     );
 
     const ctx = Context{
+        .wireframe = config.wireframe,
         .canvas = cv,
         .gltf = gltf,
         .bin = bin,
@@ -141,7 +144,7 @@ fn renderPrimitive(self: *Renderer, ctx: Context, primitive: Gltf.Primitive) !vo
     const material = if (primitive.material) |material_idx| gltf.data.materials[material_idx] else return error.NoMaterial;
     const col_factor = material.metallic_roughness.base_color_factor;
 
-    const t_img = try helpers.getTextureImage(self.allocator, gltf, material);
+    const t_img = if (ctx.wireframe) null else try helpers.getTextureImage(self.allocator, gltf, material);
     defer if (t_img) |img| self.allocator.free(img.pixels);
 
     if (primitive.indices == null) {
@@ -216,10 +219,16 @@ fn renderTriangle(self: *Renderer, ctx: Context, triangle: Triangle) void {
     const pc = Pixel.fromVec3(triangle.p2.vec, cv.width, cv.height);
 
     if (cv.inBounds(pa) or cv.inBounds(pb) or cv.inBounds(pc)) {
-        self.fillTriangle(
-            cv,
-            triangle,
-        );
+        if (ctx.wireframe) {
+            cv.drawLine(pa, pb, Color.white);
+            cv.drawLine(pb, pc, Color.white);
+            cv.drawLine(pc, pa, Color.white);
+        } else {
+            self.fillTriangle(
+                cv,
+                triangle,
+            );
+        }
     }
 }
 

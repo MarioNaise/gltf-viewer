@@ -25,6 +25,8 @@ pub const USAGE =
     \\
     \\  Model manipulation:
     \\
+    \\    -W                Render only the wireframe of the model
+    \\
     \\    Rotate 360 degrees around the specified axis over the course of the animation.
     \\    -x                Rotate model around X axis
     \\    -y                Rotate model around Y axis
@@ -52,6 +54,7 @@ pub const FlagSet = struct {
     rotX: bool = false,
     rotY: bool = false,
     rotZ: bool = false,
+    wireframe: bool = false,
     col: u8 = 60,
     row: u8 = 30,
     frames: u32 = 1,
@@ -83,6 +86,7 @@ pub fn parse(args: []const [:0]const u8) FlagSet {
                 'x' => flags.rotX = true,
                 'y' => flags.rotY = true,
                 'z' => flags.rotZ = true,
+                'W' => flags.wireframe = true,
                 'C' => flags.col = parseFlagNumber(u8, args[i..]),
                 'R' => flags.row = parseFlagNumber(u8, args[i..]),
                 'F' => flags.frames = parseFlagNumber(u32, args[i..]),
