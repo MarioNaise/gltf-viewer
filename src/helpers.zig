@@ -7,30 +7,33 @@ const Vec3 = zalgebra.Vec3;
 const Mat4 = zalgebra.Mat4;
 const zigimg = @import("zigimg");
 
-const Image = @import("Renderer.zig").Texture.Image;
+const Renderer = @import("Renderer.zig");
+const Image = Renderer.Texture.Image;
+const Context = Renderer.Context;
 
-pub fn getAttributes(allocator: std.mem.Allocator, gltf: *Gltf, world: Mat4, attributes: []Gltf.Attribute) !struct {
+pub fn getAttributes(allocator: std.mem.Allocator, ctx: Context, attributes: []Gltf.Attribute) !struct {
     positions: []Vec3,
     texcoords: []Vec2,
 } {
     var positions = std.ArrayList(Vec3).empty;
     var texcoords = std.ArrayList(Vec2).empty;
 
+    const gltf = ctx.gltf;
     for (attributes) |attr| {
         switch (attr) {
             .position => |idx| {
                 const accessor = gltf.data.accessors[idx];
-                var raw_positions_it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
+                var raw_positions_it = accessor.iterator(f32, gltf, ctx.bin);
                 while (raw_positions_it.next()) |pos| {
                     try positions.append(allocator, Mat4.mulByVec3(
-                        world,
+                        ctx.world,
                         Vec3.new(pos[0], pos[1], pos[2]),
                     ));
                 }
             },
             .texcoord => |idx| {
                 const accessor = gltf.data.accessors[idx];
-                var texc_it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
+                var texc_it = accessor.iterator(f32, gltf, ctx.bin);
                 while (texc_it.next()) |texc| {
                     try texcoords.append(allocator, Vec2.new(texc[0], texc[1]));
                 }

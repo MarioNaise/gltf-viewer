@@ -67,7 +67,6 @@ pub fn main(init: std.process.Init) !void {
     };
 
     defer arena.free(bin);
-    gltf.glb_binary = bin;
 
     var renderer = Renderer.init(arena);
 
@@ -91,6 +90,7 @@ pub fn main(init: std.process.Init) !void {
 
         try renderer.renderGltf(
             &gltf,
+            bin,
             &cv,
             .{
                 .scale = flags.scale,

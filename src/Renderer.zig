@@ -25,6 +25,13 @@ const Config = struct {
     rotation: [3]f32 = .{ 0, 0, 0 },
 };
 
+pub const Context = struct {
+    canvas: *Canvas,
+    gltf: *Gltf,
+    bin: []align(4) const u8,
+    world: Mat4,
+};
+
 pub const Triangle = struct {
     p0: Point,
     p1: Point,
@@ -57,6 +64,7 @@ pub fn init(allocator: std.mem.Allocator) Renderer {
 pub fn renderGltf(
     self: *Renderer,
     gltf: *Gltf,
+    bin: []align(4) const u8,
     cv: *Canvas,
     config: Config,
 ) !void {
@@ -74,49 +82,57 @@ pub fn renderGltf(
         Vec3.fromSlice(&config.rotation),
         Vec3.fromSlice(&config.scale),
     );
+
+    const ctx = Context{
+        .canvas = cv,
+        .gltf = gltf,
+        .bin = bin,
+        .world = world,
+    };
+
     for (scene.nodes.?) |node_index| {
-        try self.renderNode(node_index, gltf, cv, world);
+        try self.renderNode(ctx, node_index);
     }
 }
 
 fn renderNode(
     self: *Renderer,
+    ctx: Context,
     node_index: usize,
-    gltf: *Gltf,
-    cv: *Canvas,
-    world: Mat4,
 ) !void {
-    const node = gltf.data.nodes[node_index];
+    const node = ctx.gltf.data.nodes[node_index];
 
     for (node.children) |childNode| {
-        try self.renderNode(childNode, gltf, cv, world);
+        try self.renderNode(ctx, childNode);
     }
 
     if (node.mesh != null) {
-        try self.renderMesh(node_index, gltf, cv, world);
+        try self.renderMesh(ctx, node_index);
     }
 }
 
 fn renderMesh(
     self: *Renderer,
+    ctx: Context,
     node_index: usize,
-    gltf: *Gltf,
-    cv: *Canvas,
-    world: Mat4,
 ) !void {
+    const gltf = ctx.gltf;
     const node = gltf.data.nodes[node_index];
     const object_model = Mat4.fromSlice(&@bitCast(Gltf.getGlobalTransform(&gltf.data, node)));
     const mesh = gltf.data.meshes[node.mesh.?];
 
-    const global_model = Mat4.mul(world, object_model);
+    const global_model = Mat4.mul(ctx.world, object_model);
+    var ctx_copy = ctx;
+    ctx_copy.world = global_model;
 
     for (mesh.primitives) |primitive| {
-        try self.renderPrimitive(gltf, cv, global_model, primitive);
+        try self.renderPrimitive(ctx_copy, primitive);
     }
 }
 
-fn renderPrimitive(self: *Renderer, gltf: *Gltf, cv: *Canvas, world: Mat4, primitive: Gltf.Primitive) !void {
-    const attr = try helpers.getAttributes(self.allocator, gltf, world, primitive.attributes);
+fn renderPrimitive(self: *Renderer, ctx: Context, primitive: Gltf.Primitive) !void {
+    const gltf = ctx.gltf;
+    const attr = try helpers.getAttributes(self.allocator, ctx, primitive.attributes);
     const positions = attr.positions;
     const texcoords = attr.texcoords;
     defer self.allocator.free(positions);
@@ -133,7 +149,7 @@ fn renderPrimitive(self: *Renderer, gltf: *Gltf, cv: *Canvas, world: Mat4, primi
         while (i + 2 < positions.len) : (i += 3) {
             const coords = if (i + 2 < texcoords.len) texcoords[i .. i + 3] else &[_]Vec2{Vec2.zero()} ** 3;
             self.renderTriangle(
-                cv,
+                ctx,
                 .{
                     .p0 = .{ .vec = positions[i], .uv = coords[0] },
                     .p1 = .{ .vec = positions[i + 1], .uv = coords[1] },
@@ -158,7 +174,7 @@ fn renderPrimitive(self: *Renderer, gltf: *Gltf, cv: *Canvas, world: Mat4, primi
                 .unsigned_integer => u32,
                 else => unreachable,
             };
-            var it = indices_accessor.iterator(IndexType, gltf, gltf.glb_binary.?);
+            var it = indices_accessor.iterator(IndexType, gltf, ctx.bin);
 
             while (true) {
                 const idx0 = if (it.next()) |v| v[0] else break;
@@ -172,7 +188,7 @@ fn renderPrimitive(self: *Renderer, gltf: *Gltf, cv: *Canvas, world: Mat4, primi
                 } else &[_]Vec2{Vec2.zero()} ** 3;
 
                 self.renderTriangle(
-                    cv,
+                    ctx,
                     .{
                         .p0 = .{ .vec = positions[idx0], .uv = coords[0] },
                         .p1 = .{ .vec = positions[idx1], .uv = coords[1] },
@@ -189,9 +205,11 @@ fn renderPrimitive(self: *Renderer, gltf: *Gltf, cv: *Canvas, world: Mat4, primi
     }
 }
 
-fn renderTriangle(self: *Renderer, cv: *Canvas, triangle: Triangle) void {
+fn renderTriangle(self: *Renderer, ctx: Context, triangle: Triangle) void {
     if (triangle.p0.vec.z() < CLIP_Z or triangle.p1.vec.z() < CLIP_Z or triangle.p2.vec.z() < CLIP_Z)
         return;
+
+    const cv = ctx.canvas;
 
     const pa = Pixel.fromVec3(triangle.p0.vec, cv.width, cv.height);
     const pb = Pixel.fromVec3(triangle.p1.vec, cv.width, cv.height);
