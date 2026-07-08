@@ -47,30 +47,33 @@ pub fn getAttributes(allocator: std.mem.Allocator, ctx: Context, attributes: []G
     };
 }
 
-pub fn getTextureImage(allocator: std.mem.Allocator, gltf: *Gltf, material: Gltf.Material) !?Image {
-    var image = blk: {
-        const texture_info = material.metallic_roughness.base_color_texture orelse break :blk null;
-        const texture = gltf.data.textures[texture_info.index];
-        const img = if (texture.source != null) gltf.data.images[texture.source.?] else break :blk null;
-        if (img.data) |data| break :blk try zigimg.Image.fromMemory(allocator, data);
-        break :blk null;
-    };
-    defer if (image != null) image.?.deinit(allocator);
+pub fn getImage(allocator: std.mem.Allocator, gltf: *Gltf, material: Gltf.Material, buf: []?Image) !?Image {
+    const texture_info = material.metallic_roughness.base_color_texture orelse return null;
+    const texture = gltf.data.textures[texture_info.index];
+    const src_idx = texture.source orelse return null;
+    if (buf[src_idx]) |buffered|
+        return buffered;
+
+    const img = gltf.data.images[src_idx];
+    var image = if (img.data) |data| try zigimg.Image.fromMemory(allocator, data) else return null;
+
+    defer image.deinit(allocator);
 
     var pixels = std.ArrayList(zigimg.color.Colorf32).empty;
 
-    if (image != null) {
-        var imit = image.?.iterator();
-        while (imit.next()) |col| {
-            try pixels.append(allocator, col);
-        }
+    var imit = image.iterator();
+    while (imit.next()) |col| {
+        try pixels.append(allocator, col);
     }
 
-    return if (image == null) null else Image{
-        .width = image.?.width,
-        .height = image.?.height,
+    const new = Image{
+        .width = image.width,
+        .height = image.height,
         .pixels = try pixels.toOwnedSlice(allocator),
     };
+
+    buf[src_idx] = new;
+    return new;
 }
 
 pub fn lerp(comptime T: type, i_0: i32, d0: T, i_1: i32, d1: T) LerpIterator(T) {

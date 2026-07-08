@@ -69,6 +69,7 @@ pub fn main(init: std.process.Init) !void {
     defer arena.free(bin);
 
     var renderer = Renderer.init(arena);
+    defer renderer.deinit();
 
     var cv = try Canvas.init(arena, flags.pixels, flags.pixels);
     defer cv.deinit(arena);

@@ -16,6 +16,7 @@ const lerp = helpers.lerp;
 const Renderer = @This();
 
 allocator: std.mem.Allocator,
+image_buf: []?Texture.Image,
 
 const CLIP_Z: f32 = 1;
 
@@ -60,7 +61,21 @@ pub const Texture = struct {
 pub fn init(allocator: std.mem.Allocator) Renderer {
     return Renderer{
         .allocator = allocator,
+        .image_buf = &[_]?Texture.Image{},
     };
+}
+
+pub fn deinit(self: *Renderer) void {
+    self.clearImageBuffer();
+}
+
+pub fn clearImageBuffer(self: *Renderer) void {
+    if (self.image_buf.len == 0) return;
+
+    for (self.image_buf) |image| if (image) |img| self.allocator.free(img.pixels);
+
+    self.allocator.free(self.image_buf);
+    self.image_buf = &[_]?Texture.Image{};
 }
 
 pub fn renderGltf(
@@ -77,6 +92,14 @@ pub fn renderGltf(
 
     if (scene.nodes == null or scene.nodes.?.len == 0) {
         return error.NoNodes;
+    }
+
+    if (!config.wireframe and self.image_buf.len < gltf.data.images.len and gltf.data.images.len > 0) {
+        if (self.image_buf.len > 0) {
+            self.clearImageBuffer();
+        }
+        self.image_buf = try self.allocator.alloc(?Texture.Image, gltf.data.images.len);
+        @memset(self.image_buf, null);
     }
 
     const world = Mat4.recompose(
@@ -144,8 +167,7 @@ fn renderPrimitive(self: *Renderer, ctx: Context, primitive: Gltf.Primitive) !vo
     const material = if (primitive.material) |material_idx| gltf.data.materials[material_idx] else return error.NoMaterial;
     const col_factor = material.metallic_roughness.base_color_factor;
 
-    const t_img = if (ctx.wireframe) null else try helpers.getTextureImage(self.allocator, gltf, material);
-    defer if (t_img) |img| self.allocator.free(img.pixels);
+    const t_img = if (ctx.wireframe) null else try helpers.getImage(self.allocator, gltf, material, self.image_buf);
 
     if (primitive.indices == null) {
         var i: usize = 0;
@@ -353,6 +375,33 @@ fn fillTriangle(
             cv.putPixel(.{ .x = left, .y = y }, color.scale(h_segment.next() orelse 1).mulVec4(triangle.texture.color_factor));
         }
     }
+}
+
+test "deinit" {
+    const allocator = std.testing.allocator;
+    const file_buf = std.Io.Dir.cwd().readFileAllocOptions(
+        std.testing.io,
+        "zgltf/test-samples/box_binary_textured/BoxTextured.glb",
+        allocator,
+        .limited(512_000),
+        .@"4",
+        null,
+    ) catch unreachable;
+    defer allocator.free(file_buf);
+
+    var gltf = Gltf.init(allocator);
+    defer gltf.deinit();
+
+    gltf.parse(file_buf) catch unreachable;
+
+    var renderer = Renderer.init(allocator);
+
+    var cv = Canvas.init(allocator, 50, 50) catch unreachable;
+    defer cv.deinit(allocator);
+
+    renderer.renderGltf(&gltf, gltf.glb_binary.?, &cv, .{}) catch unreachable;
+
+    renderer.deinit();
 }
 
 test "fillTriangle" {
