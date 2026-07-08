@@ -48,6 +48,7 @@ pub const Pixel = struct {
 
     const Self = @This();
 
+    /// Creates a Pixel from a Vec3 and the given *width* and *height*.
     pub fn fromVec3(v: Vec3, width: usize, height: usize) Pixel {
         const w: f32 = @floatFromInt(width);
         const h: f32 = @floatFromInt(height);
@@ -59,6 +60,9 @@ pub const Pixel = struct {
     }
 };
 
+/// Initializes a new Canvas with the given width and height.
+/// Allocates an RGBA buffer and sets all pixels to transparent.
+/// Minimum width and height is 2.
 pub fn init(allocator: std.mem.Allocator, width: usize, height: usize) !Canvas {
     if (width < 2 or height < 2) return error.InvalidDimensions;
 
@@ -72,6 +76,7 @@ pub fn init(allocator: std.mem.Allocator, width: usize, height: usize) !Canvas {
     };
 }
 
+/// Deinitializes the Canvas and frees the RGBA buffer.
 pub fn deinit(self: *Canvas, allocator: std.mem.Allocator) void {
     std.debug.assert(self.rgba.len > 0);
     std.debug.assert(self.rgba.len == self.width * self.height);
@@ -79,11 +84,13 @@ pub fn deinit(self: *Canvas, allocator: std.mem.Allocator) void {
     allocator.free(self.rgba);
 }
 
-/// Clears the framebuffer by setting all pixels to transparent black (0, 0, 0, 0).
+/// Clears the Canvas by setting all pixels to transparent.
+/// Does not deallocate the RGBA buffer.
 pub fn clear(self: *Canvas) void {
     @memset(self.rgba, Color.transparent);
 }
 
+/// Checks if the given Pixel is within the bounds of the Canvas.
 pub fn inBounds(self: Canvas, p: Pixel) bool {
     const max_width = @as(i32, @intCast(self.width >> 1));
     const max_height = @as(i32, @intCast(self.height >> 1));
@@ -94,23 +101,9 @@ pub fn inBounds(self: Canvas, p: Pixel) bool {
         p.y > -max_height);
 }
 
+/// Returns the RGBA buffer as a slice of bytes.
 pub fn asBytes(self: Canvas) []u8 {
     return std.mem.sliceAsBytes(self.rgba);
-}
-
-pub fn print(self: Canvas) void {
-    for (0..self.height) |i| {
-        for (i * self.width..(i + 1) * self.width) |j| {
-            const col = std.mem.readInt(u32, &[_]u8{
-                self.rgba[j].r,
-                self.rgba[j].g,
-                self.rgba[j].b,
-                self.rgba[j].a,
-            }, .big);
-            std.debug.print("{x:0>8}, ", .{col});
-        }
-        std.debug.print("\n", .{});
-    }
 }
 
 pub fn drawTriangle(self: *Canvas, a: Pixel, b: Pixel, c: Pixel, color: Color) void {
@@ -119,8 +112,7 @@ pub fn drawTriangle(self: *Canvas, a: Pixel, b: Pixel, c: Pixel, color: Color) v
     self.drawLine(c, a, color);
 }
 
-// https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
-/// Draws a line from pixel a to pixel b with color c.
+/// Draws a line from Pixel *a* to Pixel *b* with Color *c* using Bresenham's line algorithm.
 pub fn drawLine(self: *Canvas, a: Pixel, b: Pixel, c: Color) void {
     var x0 = a.x;
     var y0 = a.y;
@@ -155,17 +147,36 @@ pub fn drawLine(self: *Canvas, a: Pixel, b: Pixel, c: Color) void {
     }
 }
 
-/// Writes Color c to the framebuffer at Pixel a.
+/// Writes Color *c* to the framebuffer at Pixel *a*.
+/// min x = -width/2,     max x = width/2 - 1
+/// min y = -heigt/2 + 1, max y = width/2
+/// example: 10x10: x = -5..4, y = -4..5 with top left = -5,5
 pub fn putPixel(self: *Canvas, p: Pixel, c: Color) void {
-    const max_width = @as(i32, @intCast(self.width >> 1));
-    const max_height = @as(i32, @intCast(self.height >> 1));
-
     if (!self.inBounds(p)) return;
+
+    const max_width: i32 = @intCast(self.width >> 1);
+    const max_height: i32 = @intCast(self.height >> 1);
 
     const idx = @as(usize, @intCast(max_height - p.y)) * self.width +
         @as(usize, @intCast(p.x + max_width));
 
     self.rgba[idx] = c;
+}
+
+/// Only for debugging, prints the canvas to stderr as a grid of u32 values
+pub fn print(self: Canvas) void {
+    for (0..self.height) |i| {
+        for (i * self.width..(i + 1) * self.width) |j| {
+            const col = std.mem.readInt(u32, &[_]u8{
+                self.rgba[j].r,
+                self.rgba[j].g,
+                self.rgba[j].b,
+                self.rgba[j].a,
+            }, .big);
+            std.debug.print("{x:0>8}, ", .{col});
+        }
+        std.debug.print("\n", .{});
+    }
 }
 
 test "init" {
@@ -188,7 +199,7 @@ test "drawTriangle" {
 
     cv.drawTriangle(.{ .x = -5, .y = 5 }, .{ .x = -5, .y = -4 }, .{ .x = 4, .y = -4 }, c1);
     cv.drawTriangle(.{ .x = -4, .y = 5 }, .{ .x = 4, .y = 5 }, .{ .x = 4, .y = -3 }, c2);
-    try expect(std.mem.eql(u8, cv.asBytes(), std.mem.sliceAsBytes(&[_]Color{
+    try std.testing.expectEqualSlices(u8, cv.asBytes(), std.mem.sliceAsBytes(&[_]Color{
         c1, c2, c2, c2, c2, c2, c2, c2, c2, c2,
         c1, c1, c2, c0, c0, c0, c0, c0, c0, c2,
         c1, c0, c1, c2, c0, c0, c0, c0, c0, c2,
@@ -199,7 +210,7 @@ test "drawTriangle" {
         c1, c0, c0, c0, c0, c0, c0, c1, c2, c2,
         c1, c0, c0, c0, c0, c0, c0, c0, c1, c2,
         c1, c1, c1, c1, c1, c1, c1, c1, c1, c1,
-    })));
+    }));
 }
 
 test "drawLine" {
@@ -212,7 +223,7 @@ test "drawLine" {
     cv.drawLine(.{ .x = 4, .y = 5 }, .{ .x = -5, .y = -4 }, c1);
     cv.drawLine(.{ .x = -5, .y = 0 }, .{ .x = 4, .y = 0 }, c1);
     cv.drawLine(.{ .x = 0, .y = 5 }, .{ .x = 0, .y = -4 }, c1);
-    try std.testing.expect(std.mem.eql(u8, cv.asBytes(), std.mem.sliceAsBytes(&[_]Color{
+    try std.testing.expectEqualSlices(u8, cv.asBytes(), std.mem.sliceAsBytes(&[_]Color{
         c1, c0, c0, c0, c0, c1, c0, c0, c0, c1,
         c0, c1, c0, c0, c0, c1, c0, c0, c1, c0,
         c0, c0, c1, c0, c0, c1, c0, c1, c0, c0,
@@ -223,7 +234,7 @@ test "drawLine" {
         c0, c0, c1, c0, c0, c1, c0, c1, c0, c0,
         c0, c1, c0, c0, c0, c1, c0, c0, c1, c0,
         c1, c0, c0, c0, c0, c1, c0, c0, c0, c1,
-    })));
+    }));
 }
 
 test "putPixel" {
@@ -237,12 +248,12 @@ test "putPixel" {
     cv.putPixel(.{ .x = -3, .y = -1 }, c1);
     cv.putPixel(.{ .x = 2, .y = -1 }, c1);
     cv.putPixel(.{ .x = 0, .y = 0 }, c1);
-    try std.testing.expect(std.mem.eql(u8, cv.asBytes(), std.mem.sliceAsBytes(&[_]Color{
+    try std.testing.expectEqualSlices(u8, cv.asBytes(), std.mem.sliceAsBytes(&[_]Color{
         c1, c0, c0, c0, c0, c1,
         c0, c0, c0, c0, c0, c0,
         c0, c0, c0, c1, c0, c0,
         c1, c0, c0, c0, c0, c1,
-    })));
+    }));
 }
 
 test "asBytes" {
@@ -253,10 +264,10 @@ test "asBytes" {
     cv.putPixel(.{ .x = 0, .y = 1 }, Color.new(0x00, 0xFF, 0x00, 0xFF));
     cv.putPixel(.{ .x = -1, .y = 0 }, Color.new(0x00, 0x00, 0xFF, 0xFF));
     cv.putPixel(.{ .x = 0, .y = 0 }, Color.new(0xFF, 0xFF, 0x00, 0x80));
-    try std.testing.expect(std.mem.eql(u8, cv.asBytes(), &[_]u8{
+    try std.testing.expectEqualSlices(u8, cv.asBytes(), &[_]u8{
         0xFF, 0x00, 0x00, 0xFF,
         0x00, 0xFF, 0x00, 0xFF,
         0x00, 0x00, 0xFF, 0xFF,
         0xFF, 0xFF, 0x00, 0x80,
-    }));
+    });
 }

@@ -8,9 +8,9 @@ a: u8,
 
 const Color = @This();
 
-pub const black = Color.new(0, 0, 0, 0xFF);
-pub const white = Color.new(0xFF, 0xFF, 0xFF, 0xFF);
-pub const transparent = Color.new(0, 0, 0, 0);
+pub const black = new(0, 0, 0, 0xFF);
+pub const white = new(0xFF, 0xFF, 0xFF, 0xFF);
+pub const transparent = new(0, 0, 0, 0);
 
 pub fn new(r: u8, g: u8, b: u8, a: u8) Color {
     return .{ .r = r, .g = g, .b = b, .a = a };
@@ -50,10 +50,11 @@ pub fn mulVec4(self: Color, v: @Vector(4, f32)) Color {
 
 test "Color" {
     const expectEql = std.testing.expectEqual;
-    try expectEql(Color.new(0, 0, 0, 0), Color.transparent);
-    try expectEql(Color.new(0xFF, 0xFF, 0xFF, 0xFF), Color.white);
-    try expectEql(Color.new(0x80, 0x80, 0x80, 0xFF), Color.white.scale(0.5));
-    try expectEql(Color.new(0x00, 0x00, 0x00, 0xFF), Color.white.scale(-0.5));
-    try expectEql(Color.new(0xFF, 0xFF, 0xFF, 0x80), Color.white.opacity(0.5));
-    try expectEql(Color.new(0xFF, 0xFF, 0xFF, 0x00), Color.white.opacity(-0.5));
+    try expectEql(new(0, 0, 0, 0), transparent);
+    try expectEql(new(0xFF, 0xFF, 0xFF, 0xFF), white);
+    try expectEql(new(0x80, 0x80, 0x80, 0xFF), white.scale(0.5));
+    try expectEql(new(0x00, 0x00, 0x00, 0xFF), white.scale(-0.5));
+    try expectEql(new(0xFF, 0xFF, 0xFF, 0x80), white.opacity(0.5));
+    try expectEql(new(0xFF, 0xFF, 0xFF, 0x00), white.opacity(-0.5));
+    try expectEql(new(0x1A, 0x80, 0x80, 0xCC), white.mulVec4([_]f32{ 0.1, 0.5, 0.5, 0.8 }));
 }

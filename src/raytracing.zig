@@ -1,4 +1,5 @@
-// Currently not used, only works with spheres yet
+// Not used in this project, just wanted to keep it for reference.
+// Simple raytracer implementation, works only with spheres.
 // https://www.gabrielgambetta.com/computer-graphics-from-scratch
 
 const std = @import("std");

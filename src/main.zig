@@ -35,7 +35,7 @@ pub fn main(init: std.process.Init) !void {
         io,
         gltf_path,
         arena,
-        .unlimited,
+        .limited(512_000_000),
         .@"4",
         null,
     );
@@ -66,7 +66,7 @@ pub fn main(init: std.process.Init) !void {
         );
     };
 
-    defer arena.free(bin);
+    defer if (gltf.glb_binary == null) arena.free(bin);
 
     var renderer = Renderer.init(arena);
     defer renderer.deinit();
@@ -109,6 +109,7 @@ pub fn main(init: std.process.Init) !void {
 
         print(
             "\x1b_Gf=32,s={d},v={d},i={d},q=1;{s}\x1b\\",
+            // TODO: scale width and height if only one of them is specified
             .{ cv.width, cv.height, image_id, payload },
         );
 
